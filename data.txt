@@ -1,0 +1,90 @@
+Name:Venkatesh
+Aadhar no:473398648679
+Name:vamshi
+Aadhar no:209599775084
+Name:prashanth
+Aadhar no:253241831588
+Name:kalyani
+Aadhar no:761202896211
+Name:sandeep
+Aadhar no:778716909316
+Name:swapna
+Aadhar no:807900842544
+Name:akshay
+Aadhar no:322071930939
+Name:ramya
+Aadhar no:746319152560
+Name:soumya
+Aadhar no:855893535350
+Name:harshini
+Aadhar no:221499842905
+
+team leader details
+aadhar photo path 
+   //*[@id="__next"]/div[2]/main/div/div[4]/div[2]/div[1]/div[1]/div[1]/div[1]/img[2]
+id proof type
+//*[@id="idType"]
+id proof number
+//*[@id="idNumber"]
+name:
+//*[@id="sevakName"]
+date of birth:
+//*[@id="dob"]
+mobile number:
+//*[@id="mobileNo"]
+email:
+//*[@id="email"]
+gender:
+//*[@id="__next"]/div[2]/main/div/div[4]/div[2]/div[1]/div[3]/div[2]/div[9]/div
+fitness:
+//*[@id="fitness"]/div
+country:
+//*[@id="country"]
+state:
+//*[@id="state"]
+district:
+//*[@id="district"]
+city:
+//*[@id="city"]
+street:
+//*[@id="street"]
+doornumber:
+//*[@id="doorNo"]
+pincode:
+//*[@id="pincode"]
+nearest ttd temple:
+//*[@id="nearestTtdTemple"]
+save and add sevak button:
+//*[@id="__next"]/div[2]/main/div/div[4]/div[2]/div[2]/button/span
+
+sevak1 details:
+photo:
+//*[@id="item-1"]/div[2]/div[1]/div[1]/div[1]/div[1]/img[2]
+id proof type:
+//*[@id="idType"]
+id proof number:
+//*[@id="idNumber"]
+name:
+//*[@id="sevakName"]
+date of birth:
+//*[@id="dob"]
+mobile number:
+//*[@id="mobileNo"]
+email id:
+//*[@id="email"]
+fitness:
+//*[@id="fitness"]/div
+country:
+/html/body/div/div[2]/main/div/div[6]/div[2]/div[1]/div[7]/div[2]/div[1]/div/input
+state:
+/html/body/div/div[2]/main/div/div[6]/div[2]/div[1]/div[7]/div[2]/div[2]/div/input
+district:
+/html/body/div/div[2]/main/div/div[6]/div[2]/div[1]/div[7]/div[2]/div[3]/div/input
+city:
+/html/body/div/div[2]/main/div/div[6]/div[2]/div[1]/div[7]/div[2]/div[4]/div/input
+street:
+//*[@id="street"]
+door no:
+//*[@id="doorNo"]
+pincode:
+//*[@id="pincode"]

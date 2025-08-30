@@ -1,0 +1,22 @@
+{
+  "members": [
+    {
+      "name": "KORLAM MOUNIKA",
+      "aadhaar": "962304009185",
+      "dob": "18-06-1980",
+      "age": "43",
+      "mobile": "9515753648",
+      "email": "SIVaPRaSaDBEHaRa1986@GMaIL.COM",
+      "gender": "FEMALE",
+      "fitness": ["Mentally Fit", "Physically Fit"],
+      "district": "Kakinada",
+      "city": "Kakinada",
+      "street": "Ramalayam Street",
+      "state": "Andhra Pradesh",
+      "doorno": "LIG-1-186",
+      "pincode": "533450",
+      "photo": "member1_photo.jpg",
+      "id_proof": "member1_aadhaar.jpg"
+    }
+  ]
+}
