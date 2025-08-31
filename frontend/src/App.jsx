@@ -1,5 +1,6 @@
 import './App.css'
 import { useEffect, useRef, useState, useMemo } from 'react'
+import { API_BASE } from './config'
 
 function Badge({ color = 'sky', children }) {
   const map = {
@@ -55,10 +56,10 @@ function Hero() {
   async function refresh() {
     setLoading(true); setError('')
     try {
-      const u = `http://127.0.0.1:8000/screenshot?t=${Date.now()}`
+      const u = `${API_BASE}/screenshot?t=${Date.now()}`
       // Optimistically set image URL (browser will request it directly)
       setImgUrl(u)
-      const res2 = await fetch('http://127.0.0.1:8000/current-url')
+      const res2 = await fetch(`${API_BASE}/current-url`)
       const data2 = await res2.json()
       setUrl(data2?.url || '')
     } catch {
@@ -122,7 +123,7 @@ function Dashboard() {
 
   async function fetchStatus() {
     try {
-      const res = await fetch('http://127.0.0.1:8000/status')
+      const res = await fetch(`${API_BASE}/status`)
       const data = await res.json()
       setStatus(data)
     } catch (err) {
@@ -133,7 +134,7 @@ function Dashboard() {
   async function openBrowser() {
     setBusy(true)
     try {
-      await fetch('http://127.0.0.1:8000/open-browser', { method: 'POST' })
+      await fetch(`${API_BASE}/open-browser`, { method: 'POST' })
       await fetchStatus()
     } finally { setBusy(false) }
   }
@@ -141,7 +142,7 @@ function Dashboard() {
   async function startBot() {
     setBusy(true)
     try {
-      await fetch('http://127.0.0.1:8000/start', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ open_browser: true }) })
+      await fetch(`${API_BASE}/start`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ open_browser: true }) })
       await fetchStatus()
     } finally { setBusy(false) }
   }
@@ -149,7 +150,7 @@ function Dashboard() {
   async function stopBot() {
     setBusy(true)
     try {
-      await fetch('http://127.0.0.1:8000/stop', { method: 'POST' })
+      await fetch(`${API_BASE}/stop`, { method: 'POST' })
       await fetchStatus()
     } finally { setBusy(false) }
   }
@@ -157,7 +158,7 @@ function Dashboard() {
   async function closeBrowser() {
     setBusy(true)
     try {
-      await fetch('http://127.0.0.1:8000/close-browser', { method: 'POST' })
+      await fetch(`${API_BASE}/close-browser`, { method: 'POST' })
       await fetchStatus()
     } finally { setBusy(false) }
   }
@@ -301,7 +302,7 @@ function MemberRow({ index, value, onChange, onRemove, disabledRemove }) {
                 try {
                   const form = new FormData()
                   form.append('file', file)
-                  const res = await fetch('http://127.0.0.1:8000/upload-photo', { method: 'POST', body: form })
+                  const res = await fetch(`${API_BASE}/upload-photo`, { method: 'POST', body: form })
                   const data = await res.json()
                   if (data?.path) set('photo', data.path)
                 } catch (err) {
@@ -321,11 +322,11 @@ function MemberRow({ index, value, onChange, onRemove, disabledRemove }) {
                   // Absolute URL
                   if (/^https?:\/\//i.test(p)) return p
                   // Already includes server prefix
-                  if (p.startsWith('http://127.0.0.1:8000/') || p.startsWith('http://localhost:8000/')) return p
+                  if (p.startsWith(`${API_BASE}/`) || p.startsWith('http://127.0.0.1:8000/') || p.startsWith('http://localhost:8000/')) return p
                   // Serve known relative paths via API server
                   if (p.startsWith('/uploads/') || p.startsWith('uploads/') || p.startsWith('/images/') || p.startsWith('images/')) {
                     const rel = p.startsWith('/') ? p : `/${p}`
-                    return `http://127.0.0.1:8000${rel}`
+                    return `${API_BASE}${rel}`
                   }
                   // Windows drive path or other local path cannot be previewed by browser directly
                   return ''
@@ -356,7 +357,7 @@ function ConfigEditor() {
   async function reload() {
     setLoading(true)
     try {
-      const res = await fetch('http://127.0.0.1:8000/config')
+      const res = await fetch(`${API_BASE}/config`)
       const data = await res.json()
       setGeneral({
         group_size: data?.general?.group_size ?? '',
@@ -395,7 +396,7 @@ function ConfigEditor() {
         },
         members: members,
       }
-      await fetch('http://127.0.0.1:8000/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      await fetch(`${API_BASE}/config`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
     } catch (e) {
       console.error('config save failed', e)
     } finally {

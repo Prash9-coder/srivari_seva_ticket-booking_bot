@@ -1,0 +1,8 @@
+# Replace <user> and <tunnel-uuid> after running `cloudflared tunnel create`.
+ingress:
+  - hostname: api.example.com
+    service: http://127.0.0.1:8000
+  - service: http_status:404
+
+tunnel: ttd-bot
+credentials-file: C:\Users\<user>\.cloudflared\<tunnel-uuid>.json

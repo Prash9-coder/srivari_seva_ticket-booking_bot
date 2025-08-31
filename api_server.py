@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException, Response, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 import threading
 import uvicorn
@@ -11,6 +12,11 @@ from ttd_bot import TTDBookingBot
 
 app = FastAPI(title="TTD Bot API", version="1.0")
 
+@app.get("/")
+def root():
+    # Helpful hint when someone opens the API root directly
+    return {"ok": True, "message": "TTD Bot API is running", "docs": "/docs", "status": "/status"}
+
 # Ensure uploads directory exists
 UPLOAD_DIR = os.path.join(os.getcwd(), "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -20,10 +26,13 @@ app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 # Serve project images folder for existing paths like 'images/1.jpg'
 app.mount("/images", StaticFiles(directory=os.path.join(os.getcwd(), "images")), name="images")
 
-# Allow local dev frontend
+# Allow frontend origins via env (plus dev defaults)
+_frontend_origins = os.getenv("FRONTEND_ORIGINS", "").split(",") if os.getenv("FRONTEND_ORIGINS") else []
+_frontend_origins = [o.strip() for o in _frontend_origins if o.strip()]
+allow_origins = ["http://localhost:5173", "http://127.0.0.1:5173"] + _frontend_origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=allow_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -190,4 +199,5 @@ async def upload_photo(file: UploadFile = File(...)):
 if __name__ == "__main__":
     # Run API server
     port = int(os.getenv("PORT", 8000))
-    uvicorn.run(app, host="127.0.0.1", port=port)
+    host = os.getenv("HOST", "0.0.0.0")
+    uvicorn.run(app, host=host, port=port)
