@@ -15,6 +15,7 @@ import os
 import re
 import difflib
 import random
+from collections import deque
 
 try:
     import pyttsx3
@@ -24,9 +25,9 @@ except Exception:
 class TTDBookingBot:
     def __init__(self, root):
         self.root = root
-        self.root.title("TTD Virtual Seva Booking Bot")
-        self.root.geometry("900x700")
-        self.root.resizable(True, True)
+        # Log buffer for API consumption (headless or GUI)
+        self._log_buffer = deque(maxlen=1000)
+        self._seq = 0
         self.driver = None
         self.is_running = False
         self.is_browser_open = False
@@ -36,8 +37,16 @@ class TTDBookingBot:
         self.ui_key_delay = 0.06            # delay between key actions for dropdowns
         self.booking_data = self.load_booking_data()
         self.current_member_index = 0
-        self.setup_gui()
-        self.root.after(300, self.open_browser)
+        if self.root is not None:
+            # Only initialize Tk UI when a root is provided
+            self.root.title("TTD Virtual Seva Booking Bot")
+            self.root.geometry("900x700")
+            self.root.resizable(True, True)
+            self.setup_gui()
+            try:
+                self.root.after(300, self.open_browser)
+            except Exception:
+                pass
 
     def setup_gui(self):
         main_frame = ttk.Frame(self.root, padding="10")
@@ -334,17 +343,34 @@ class TTDBookingBot:
                 json.dump(payload, f, indent=2)
             self.log_message("Members saved.")
             if show_message:
-                messagebox.showinfo("Success", "Srivari members saved.")
+                try:
+                    messagebox.showinfo("Success", "Srivari members saved.")
+                except Exception:
+                    pass
         except Exception as ex:
             self.log_message(f"Failed to save members: {ex}")
             if show_message:
-                messagebox.showerror("Error", f"Failed to save members: {ex}")
+                try:
+                    messagebox.showerror("Error", f"Failed to save members: {ex}")
+                except Exception:
+                    pass
 
     def log_message(self, message):
-        # Thread-safe UI logging via Tk event loop
+        # Append to buffer for API access
+        try:
+            self._seq += 1
+            self._log_buffer.append({
+                "seq": self._seq,
+                "ts": time.strftime('%H:%M:%S'),
+                "msg": str(message),
+            })
+        except Exception:
+            pass
+        # Thread-safe UI logging via Tk event loop (when GUI available)
         ts_msg = f"{time.strftime('%H:%M:%S')} - {message}\n"
         try:
-            self.root.after(0, lambda: (self.log_area.insert(tk.END, ts_msg), self.log_area.see(tk.END)))
+            if self.root is not None:
+                self.root.after(0, lambda: (self.log_area.insert(tk.END, ts_msg), self.log_area.see(tk.END)))
         except Exception:
             # Fallback if root is closing
             try:
@@ -354,7 +380,7 @@ class TTDBookingBot:
                 pass
         # Avoid speaking very long messages to reduce lag
         try:
-            if getattr(self, 'voice_enabled', None) and self.voice_enabled.get() and len(str(message)) <= 120:
+            if getattr(self, 'voice_enabled', None) and self.root is not None and self.voice_enabled.get() and len(str(message)) <= 120:
                 self._speak_async(message)
         except Exception:
             pass
@@ -456,31 +482,51 @@ class TTDBookingBot:
                 pass
             self.log_message("Navigating to TTD booking page...")
             self.driver.get("https://ttdevasthanams.ap.gov.in")
-            self.arrange_windows_side_by_side()
+            try:
+                self.arrange_windows_side_by_side()
+            except Exception:
+                pass
             self.is_browser_open = True
-            self.activate_button.config(state=tk.NORMAL)
-            self.open_browser_button.config(state=tk.DISABLED)
-            self.status_label.config(text="Status: Browser open - Please login manually", foreground="orange")
+            # Guard UI updates in headless mode
+            try:
+                self.activate_button.config(state=tk.NORMAL)
+                self.open_browser_button.config(state=tk.DISABLED)
+                self.status_label.config(text="Status: Browser open - Please login manually", foreground="orange")
+            except Exception:
+                pass
             self.log_message("Browser opened successfully. Please login manually and navigate to the Srivari Seva Team Leader page.")
         except WebDriverException as e:
             self.log_message(f"WebDriver error: {str(e)}")
-            messagebox.showerror("Error", f"Failed to start Chrome driver. Is Chrome installed?\n{str(e)}")
+            try:
+                messagebox.showerror("Error", f"Failed to start Chrome driver. Is Chrome installed?\n{str(e)}")
+            except Exception:
+                pass
         except Exception as e:
             self.log_message(f"Error opening browser: {str(e)}")
-            messagebox.showerror("Error", f"Unexpected error: {str(e)}")
+            try:
+                messagebox.showerror("Error", f"Unexpected error: {str(e)}")
+            except Exception:
+                pass
 
     def start_bot(self):
         self.is_running = True
-        self.activate_button.config(text="Deactivate Auto-Fill")
-        self.status_label.config(text="Status: Auto-Fill Active", foreground="green")
+        # Guard UI updates in headless mode
+        try:
+            self.activate_button.config(text="Deactivate Auto-Fill")
+            self.status_label.config(text="Status: Auto-Fill Active", foreground="green")
+        except Exception:
+            pass
         self.log_message("Auto-fill activated. Filling details...")
         bot_thread = threading.Thread(target=self.run_bot, daemon=True)
         bot_thread.start()
 
     def stop_bot(self):
         self.is_running = False
-        self.activate_button.config(text="Activate Auto-Fill")
-        self.status_label.config(text="Status: Browser open - Auto-Fill Inactive", foreground="orange")
+        try:
+            self.activate_button.config(text="Activate Auto-Fill")
+            self.status_label.config(text="Status: Browser open - Auto-Fill Inactive", foreground="orange")
+        except Exception:
+            pass
         self.log_message("Auto-fill deactivated.")
 
     def load_booking_data(self):
@@ -1287,11 +1333,17 @@ class TTDBookingBot:
             self.log_message(f"Error in bot execution: {str(e)}")
         finally:
             if not self.is_running:
-                self.status_label.config(text="Status: Inactive", foreground="red")
+                try:
+                    self.status_label.config(text="Status: Inactive", foreground="red")
+                except Exception:
+                    pass
             elif not self.is_browser_open:
-                self.status_label.config(text="Status: Browser closed", foreground="red")
-                self.open_browser_button.config(state=tk.NORMAL)
-                self.activate_button.config(state=tk.DISABLED)
+                try:
+                    self.status_label.config(text="Status: Browser closed", foreground="red")
+                    self.open_browser_button.config(state=tk.NORMAL)
+                    self.activate_button.config(state=tk.DISABLED)
+                except Exception:
+                    pass
 
     def wait_for_srivari_page(self):
         self.log_message("Waiting for Srivari Seva form...")

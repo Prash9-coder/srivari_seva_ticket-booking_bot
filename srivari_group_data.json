@@ -1,4 +1,9 @@
 {
+  "general": {
+    "group_size": 10,
+    "auto_select_date": true,
+    "auto_download_ticket": true
+  },
   "members": [
     {
       "name": "PAPANNAGARI SHANTHA",
@@ -20,7 +25,7 @@
     },
     {
       "name": "LAKSHMAIAHGARI ANUSHA",
-      "dob": "03/11/1987",
+      "dob": "1987",
       "age": "",
       "blood_group": "",
       "gender": "Female",
@@ -74,10 +79,10 @@
     },
     {
       "name": "ROKANDLA SUNITHA",
-      "dob": "02/041981",
+      "dob": "1981",
       "age": "",
       "blood_group": "",
-      "gender": "Other",
+      "gender": "Female",
       "id_proof_type": "Aadhaar",
       "id_number": "970114496366",
       "mobile": "9949222482",
@@ -128,7 +133,7 @@
     },
     {
       "name": "PASUMALA NARMADA",
-      "dob": "04/12/1981",
+      "dob": "1981",
       "age": "",
       "blood_group": "",
       "gender": "Female",
@@ -146,7 +151,7 @@
     },
     {
       "name": "PATLORI VIJAYA",
-      "dob": "14/03/1967",
+      "dob": "1967",
       "age": "",
       "blood_group": "",
       "gender": "Female",
