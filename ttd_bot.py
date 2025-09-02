@@ -37,6 +37,9 @@ class TTDBookingBot:
         self.ui_key_delay = 0.06            # delay between key actions for dropdowns
         self.booking_data = self.load_booking_data()
         self.current_member_index = 0
+        # Behavior flags (can be overridden by API/general config)
+        self.respect_existing = True  # when True, do not overwrite non-empty fields
+        self.aadhaar_autofill_wait_seconds = 6  # wait for site autofill after ID number
         if self.root is not None:
             # Only initialize Tk UI when a root is provided
             self.root.title("TTD Virtual Seva Booking Bot")
@@ -144,7 +147,7 @@ class TTDBookingBot:
         headers = [
             "#", "Name*", "DOB*", "Age*", "Blood Group*", "Gender*",
             "ID Type*", "ID Number*", "Mobile*", "Email*", "State", "District", "City",
-            "Street", "Door No", "Pincode", "Photo*", ""
+            "Street", "Door No", "Pincode", "Photo*", "Nearest TTD Temple", " "
         ]
         for col, h in enumerate(headers):
             ttk.Label(members_container, text=h).grid(row=0, column=col, padx=5, pady=2, sticky=tk.W)
@@ -356,13 +359,18 @@ class TTDBookingBot:
                     pass
 
     def log_message(self, message):
-        # Append to buffer for API access
+        # Append to buffer for API access, redacting sensitive numbers
         try:
+            msg = str(message)
+            # redact 12+ digit runs and email-like tokens
+            import re
+            msg = re.sub(r"\b(\d{4}[ -]?){3,}\d+\b", "[REDACTED]", msg)
+            msg = re.sub(r"[\w.%-]+@[\w.-]+\.[A-Za-z]{2,}", "[REDACTED]", msg)
             self._seq += 1
             self._log_buffer.append({
                 "seq": self._seq,
                 "ts": time.strftime('%H:%M:%S'),
-                "msg": str(message),
+                "msg": msg,
             })
         except Exception:
             pass
@@ -460,12 +468,25 @@ class TTDBookingBot:
             options.add_argument("--disable-notifications")
             options.add_experimental_option("excludeSwitches", ["enable-automation"])
             options.add_experimental_option('useAutomationExtension', False)
+
+            # Persistent Chrome profile for session reuse
+            try:
+                prof = os.environ.get("TTD_CHROME_PROFILE")
+                if not prof:
+                    # default to a local profile folder within repo
+                    prof = os.path.abspath(os.path.join(os.getcwd(), "chrome_profile"))
+                os.makedirs(prof, exist_ok=True)
+                options.add_argument(f"--user-data-dir={prof}")
+            except Exception:
+                pass
+
             prefs = None
             try:
                 if os.path.exists("srivari_group_data.json"):
                     with open("srivari_group_data.json", "r", encoding="utf-8") as f:
                         _sg = json.load(f)
-                        _dl = ((_sg or {}).get("general") or {}).get("download_dir")
+                        _g = (_sg or {}).get("general") or {}
+                        _dl = _g.get("download_dir")
                         if _dl and isinstance(_dl, str) and os.path.isdir(_dl):
                             prefs = {"download.default_directory": _dl, "download.prompt_for_download": False, "profile.default_content_setting_values.automatic_downloads": 1}
             except Exception:
@@ -647,6 +668,25 @@ class TTDBookingBot:
             el = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.XPATH, trigger_xpath)))
             self._scroll_into_view(el)
 
+            # If a selection already exists, leave it untouched
+            try:
+                placeholders = {"select", "choose", "--select--", "-- choose --"}
+                tag = (el.tag_name or "").lower()
+                current_txt = ""
+                if tag == "select":
+                    try:
+                        sel = Select(el)
+                        current_txt = (sel.first_selected_option.text or "").strip()
+                    except Exception:
+                        current_txt = ""
+                else:
+                    current_txt = (el.get_attribute("value") or "").strip()
+                if current_txt and current_txt.strip().lower() not in placeholders:
+                    self.log_message(f"Skip dropdown {trigger_xpath}: already selected '{current_txt}'")
+                    return False
+            except Exception:
+                pass
+
             try:
                 tag = (el.tag_name or "").lower()
             except Exception:
@@ -815,8 +855,23 @@ class TTDBookingBot:
     def click_xpath(self, xp):
         if not xp:
             return False
+        el = None
         try:
-            el = WebDriverWait(self.driver, 12).until(EC.element_to_be_clickable((By.XPATH, xp)))
+            el = WebDriverWait(self.driver, 10).until(EC.element_to_be_clickable((By.XPATH, xp)))
+        except Exception:
+            pass
+        if el is None:
+            # Try fallback by ID within the XPath
+            try:
+                m = re.search(r"@id=\"([^\"]+)\"", xp)
+                if m:
+                    el = WebDriverWait(self.driver, 8).until(EC.element_to_be_clickable((By.ID, m.group(1))))
+            except Exception:
+                el = None
+        if el is None:
+            self.log_message(f"Failed to resolve element for click: {xp}")
+            return False
+        try:
             self._scroll_into_view(el)
             try:
                 el.click()
@@ -843,9 +898,26 @@ class TTDBookingBot:
             except Exception: 
                 pass
             time.sleep(0.3)
-        self.clear_input_by_xpath(name_x)
-        self.clear_input_by_xpath(id_x)
         return False
+
+    def clear_member_form(self, x):
+        # Aggressively clear all known inputs so subsequent members can be filled reliably
+        try:
+            for key in [
+                "name_input","id_proof_number_input","dob_input","age_input","mobile_input","email_input",
+                "city_input","street_input","doorno_input","pincode_input"
+            ]:
+                self.clear_input_by_xpath(x.get(key))
+        except Exception:
+            pass
+        # Close any open dropdown-like inputs
+        try:
+            ntt = x.get("nearest_ttd_temple_dropdown")
+            if ntt:
+                el = self.driver.find_element(By.XPATH, ntt)
+                el.send_keys(Keys.ESCAPE)
+        except Exception:
+            pass
 
     def wait_for_continue_clickable(self, xpath, timeout=30):
         if not xpath:
@@ -878,6 +950,135 @@ class TTDBookingBot:
             self.driver.execute_script("arguments[0].scrollIntoView({block:'center'});", el)
         except Exception:
             pass
+
+    def get_input_value_by_xpath(self, xpath):
+        if not xpath:
+            return ""
+        try:
+            el = self.driver.find_element(By.XPATH, xpath)
+            return (el.get_attribute("value") or "").strip()
+        except Exception:
+            return ""
+
+    def _format_dob_for_site(self, value):
+        # Convert various DOB inputs into DD/MM/YYYY as required by the site
+        if not value:
+            return value
+        v = str(value).strip()
+        try:
+            # If already in dd/mm/yyyy
+            if "/" in v:
+                parts = v.split("/")
+                if len(parts) == 3 and len(parts[0]) <= 2 and len(parts[1]) <= 2 and len(parts[2]) >= 4:
+                    dd = parts[0].zfill(2)
+                    mm = parts[1].zfill(2)
+                    yyyy = parts[2][-4:]
+                    return f"{dd}/{mm}/{yyyy}"
+            # If yyyy-mm-dd
+            if "-" in v:
+                parts = v.split("-")
+                if len(parts) == 3 and len(parts[0]) == 4:
+                    yyyy, mm, dd = parts
+                    return f"{dd.zfill(2)}/{mm.zfill(2)}/{yyyy}"
+            # If digits only and 8 length, assume ddmmyyyy or yyyymmdd heuristics
+            digits = ''.join(ch for ch in v if ch.isdigit())
+            if len(digits) == 8:
+                # Heuristic: if starts with 19/20 treat as yyyymmdd
+                if digits.startswith("19") or digits.startswith("20"):
+                    yyyy = digits[:4]; mm = digits[4:6]; dd = digits[6:]
+                else:
+                    dd = digits[:2]; mm = digits[2:4]; yyyy = digits[4:]
+                return f"{dd}/{mm}/{yyyy}"
+        except Exception:
+            pass
+        return v
+
+    def set_text_if_empty_by_xpath(self, xpath, value, *, is_dob=False):
+        if not xpath or value in (None, ""):
+            return False
+        try:
+            current = self.get_input_value_by_xpath(xpath)
+            if current and self.respect_existing:
+                # Already filled (likely by Aadhaar autofill) – do not overwrite
+                self.log_message(f"Skip set at {xpath}: already filled with '{current}'")
+                return False
+        except Exception:
+            pass
+        if is_dob:
+            value = self._format_dob_for_site(value)
+            return self._set_dob_masked_by_xpath(xpath, value)
+        return self.set_text_by_xpath(xpath, value)
+
+    def _set_dob_masked_by_xpath(self, xpath, dob_ddmmyyyy):
+        # Type DOB using digits-only so input masks auto-insert slashes, then verify
+        try:
+            el = WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.XPATH, xpath)))
+            self._scroll_into_view(el)
+            try:
+                el.click()
+            except Exception:
+                self.driver.execute_script("arguments[0].click();", el)
+            time.sleep(self.ui_key_delay)
+            # Hard clear: select all + delete + JS fallback
+            try:
+                el.send_keys(Keys.CONTROL, 'a'); time.sleep(self.ui_key_delay); el.send_keys(Keys.BACKSPACE)
+            except Exception:
+                pass
+            try:
+                self.driver.execute_script("arguments[0].value='';", el)
+            except Exception:
+                pass
+            # Send digits only
+            digits = ''.join(ch for ch in str(dob_ddmmyyyy) if ch.isdigit())
+            if len(digits) != 8:
+                # As a fallback, derive digits from formatted string
+                f = self._format_dob_for_site(dob_ddmmyyyy)
+                digits = ''.join(ch for ch in f if ch.isdigit())
+            for ch in digits:
+                el.send_keys(ch); time.sleep(self.ui_key_delay)
+            # Blur to trigger validations
+            el.send_keys(Keys.TAB); time.sleep(self.ui_post_select_delay)
+            # Verify value
+            final = (el.get_attribute('value') or '').strip()
+            expected = self._format_dob_for_site(dob_ddmmyyyy)
+            if final != expected:
+                # Try setting via JS and dispatching events
+                try:
+                    self.driver.execute_script(
+                        "arguments[0].value = arguments[1]; arguments[0].dispatchEvent(new Event('input', {bubbles:true})); arguments[0].dispatchEvent(new Event('change', {bubbles:true}));",
+                        el, expected
+                    )
+                    time.sleep(self.ui_post_select_delay)
+                    final = (el.get_attribute('value') or '').strip()
+                except Exception:
+                    pass
+            ok = final == expected
+            self.log_message(f"DOB set to {final} (expected {expected}) -> {'OK' if ok else 'MISMATCH'}")
+            return ok
+        except Exception as e:
+            self.log_message(f"DOB input failed {xpath}: {e}")
+            return False
+
+    def wait_for_aadhaar_autofill(self, x, timeout=12):
+        # After entering Aadhaar, wait briefly to see if site auto-fills fields
+        end = time.time() + timeout
+        keys_to_check = [
+            "name_input", "dob_input", "age_input", "mobile_input", "email_input",
+            "city_input", "street_input", "doorno_input", "pincode_input"
+        ]
+        while time.time() < end:
+            try:
+                any_filled = False
+                for k in keys_to_check:
+                    xp = x.get(k)
+                    if xp and self.get_input_value_by_xpath(xp):
+                        any_filled = True; break
+                if any_filled:
+                    return True
+            except Exception:
+                pass
+            time.sleep(0.3)
+        return False
 
     def pick_random_from_dropdown(self, trigger_xpath):
         # Open dropdown and click a random option among visible candidates
@@ -979,10 +1180,40 @@ class TTDBookingBot:
     def set_text_by_xpath(self, xpath, value):
         if not xpath or value in (None, ""):
             return False
+        # Primary attempt: XPath
         try:
             el = WebDriverWait(self.driver, 8).until(
                 EC.presence_of_element_located((By.XPATH, xpath))
             )
+        except Exception:
+            el = None
+        # Fallbacks: try ID/NAME/CSS when XPath fails or element is stale
+        if el is None:
+            try:
+                m = re.search(r"@id=\"([^\"]+)\"", xpath)
+                if m:
+                    el = WebDriverWait(self.driver, 6).until(EC.presence_of_element_located((By.ID, m.group(1))))
+            except Exception:
+                el = None
+            if el is None:
+                try:
+                    m = re.search(r"@name=\"([^\"]+)\"", xpath)
+                    if m:
+                        el = WebDriverWait(self.driver, 6).until(EC.presence_of_element_located((By.NAME, m.group(1))))
+                except Exception:
+                    el = None
+        if el is None:
+            # Try CSS by id as last resort
+            try:
+                m = re.search(r"@id=\"([^\"]+)\"", xpath)
+                if m:
+                    el = WebDriverWait(self.driver, 6).until(EC.presence_of_element_located((By.CSS_SELECTOR, f"#{m.group(1)}")))
+            except Exception:
+                el = None
+        if el is None:
+            self.log_message(f"set_text_by_xpath could not locate element: {xpath}")
+            return False
+        try:
             self._scroll_into_view(el)
             try:
                 el.clear()
@@ -1105,19 +1336,24 @@ class TTDBookingBot:
         if x.get("photo_trigger") and photo:
             self.upload_file_via_trigger(x.get("photo_trigger"), photo, x.get("photo_file_input"))
             
+        # 1) Aadhaar first
         id_type = gv("id_proof_type", "id_proof", default="Aadhaar")
         id_no = gv("id_number", "aadhaar", "aadhar_no")
         self.set_custom_dropdown_by_xpath(x.get("id_proof_type_dropdown",""), id_type)
         self.set_text_by_xpath(x.get("id_proof_number_input",""), id_no)
-        self.set_text_by_xpath(x.get("name_input",""), gv("name"))
-        
+        # Wait briefly for Aadhaar-driven autofill (if any)
+        self.wait_for_aadhaar_autofill(x, timeout=self.aadhaar_autofill_wait_seconds)
+
+        # 2) Fill only if empty (respect autofill/manual input)
+        self.set_text_if_empty_by_xpath(x.get("name_input",""), gv("name"))
+
         if x.get("dob_input") and gv("dob"):
-            self.set_text_by_xpath(x.get("dob_input",""), gv("dob"))
+            self.set_text_if_empty_by_xpath(x.get("dob_input",""), gv("dob"), is_dob=True)
         if x.get("age_input") and gv("age"):
-            self.set_text_by_xpath(x.get("age_input",""), gv("age"))
+            self.set_text_if_empty_by_xpath(x.get("age_input",""), gv("age"))
             
-        self.set_text_by_xpath(x.get("mobile_input",""), gv("mobile"))
-        self.set_text_by_xpath(x.get("email_input",""), gv("email", "mail_id"))
+        self.set_text_if_empty_by_xpath(x.get("mobile_input",""), gv("mobile"))
+        self.set_text_if_empty_by_xpath(x.get("email_input",""), gv("email", "mail_id"))
         
         if gv("blood_group") and x.get("blood_group_dropdown"):
             self.set_custom_dropdown_by_xpath(x.get("blood_group_dropdown",""), gv("blood_group"))
@@ -1149,15 +1385,13 @@ class TTDBookingBot:
             st_val = gv("state")
             if st_val:
                 self.wait_for_dropdown_ready(x.get("state_dropdown"), expected_value=st_val, min_options=2, timeout=15)
-                if self.set_custom_dropdown_by_xpath(x.get("state_dropdown",""), st_val):
-                    time.sleep(self.ui_post_select_delay)
-            
+                self.set_custom_dropdown_by_xpath(x.get("state_dropdown",""), st_val)
+                
             # District (wait for it to populate after state)
             dt_val = gv("district")
             if dt_val:
                 self.wait_for_dropdown_ready(x.get("district_dropdown"), expected_value=dt_val, min_options=2, timeout=15)
-                if self.set_custom_dropdown_by_xpath(x.get("district_dropdown",""), dt_val):
-                    time.sleep(self.ui_post_select_delay)
+                self.set_custom_dropdown_by_xpath(x.get("district_dropdown",""), dt_val)
                 
             city_val = gv("city")
             if city_val:
@@ -1171,26 +1405,34 @@ class TTDBookingBot:
                     except Exception:
                         current = ""
                     if not current or self._normalize(current) != self._normalize(city_val):
-                        self.set_text_by_xpath(x.get("city_input",""), city_val)
+                        self.set_text_if_empty_by_xpath(x.get("city_input",""), city_val)
                 else:
-                    self.set_text_by_xpath(x.get("city_input",""), city_val)
+                    self.set_text_if_empty_by_xpath(x.get("city_input",""), city_val)
                     
-            # Address fields
-            self.set_text_by_xpath(x.get("street_input",""), gv("street"))
-            self.set_text_by_xpath(x.get("doorno_input",""), gv("doorno", "door_no"))
-            self.set_text_by_xpath(x.get("pincode_input",""), gv("pincode", "pin_code"))
+            # Address fields (only fill if empty)
+            self.set_text_if_empty_by_xpath(x.get("street_input",""), gv("street"))
+            self.set_text_if_empty_by_xpath(x.get("doorno_input",""), gv("doorno", "door_no"))
+            self.set_text_if_empty_by_xpath(x.get("pincode_input",""), gv("pincode", "pin_code"))
             
-            # Nearest TTD temple
-            ntt = gv("nearest_ttd_temple")
+            # Nearest TTD temple (robust selection) – leave as is if already chosen
+            ntt = gv("nearest_ttd_temple") or gv("nearest ttd temple")
             if x.get("nearest_ttd_temple_dropdown"):
-                if ntt:
-                    # If provided in data, try to select that
-                    self.set_custom_dropdown_by_xpath(x.get("nearest_ttd_temple_dropdown",""), ntt)
+                # Try a direct value first
+                if ntt and self.set_custom_dropdown_by_xpath(x.get("nearest_ttd_temple_dropdown",""), ntt):
+                    pass
                 else:
-                    # Otherwise, randomly pick one visible option
-                    picked = self.pick_random_from_dropdown(x.get("nearest_ttd_temple_dropdown",""))
-                    if not picked:
-                        self.log_message("Could not pick random Nearest TTD Temple (no options detected).")
+                    try:
+                        el = WebDriverWait(self.driver, 8).until(EC.presence_of_element_located((By.XPATH, x.get("nearest_ttd_temple_dropdown",""))))
+                        current = (el.get_attribute("value") or "").strip()
+                        if not current:
+                            self._scroll_into_view(el)
+                            el.click(); time.sleep(self.ui_open_delay)
+                            if not self.pick_random_from_dropdown(x.get("nearest_ttd_temple_dropdown","")):
+                                for _ in range(4):
+                                    el.send_keys(Keys.ARROW_DOWN); time.sleep(self.ui_key_delay)
+                                el.send_keys(Keys.ENTER); time.sleep(self.ui_post_select_delay)
+                    except Exception:
+                        self.log_message("Could not set Nearest TTD Temple.")
 
     def load_srivari_source(self):
         config = {"general": {}, "members": []}
@@ -1234,21 +1476,42 @@ class TTDBookingBot:
         except Exception:
             pass
 
+        # Crash-recovery: resume from last saved member index
+        resume_from = 2
+        try:
+            meta_path = "booking_data.json"
+            if os.path.exists(meta_path):
+                with open(meta_path, "r", encoding="utf-8") as f:
+                    meta = json.load(f) or {}
+                resume_from = int(meta.get("current_member_index", 2))
+        except Exception:
+            resume_from = 2
+
         for idx, m in enumerate(members[1:], start=2):
             if limit and idx > limit:
                 break
+            if idx < resume_from:
+                continue
 
-            # Wait for manual click on 'Save and Add Sevak' instead of auto-clicking
-            try:
-                self.log_message("⏸ Waiting for you to manually click 'Save and Add Sevak'...")
-                btn = WebDriverWait(self.driver, 10).until(
-                    EC.presence_of_element_located((By.XPATH, x.get("save_add_sevak_button")))
-                )
-                # Wait up to 5 minutes for the button to become stale (clicked and DOM refreshed)
-                WebDriverWait(self.driver, 300).until(EC.staleness_of(btn))
-                self.log_message("✅ Detected manual click! Continuing with next Sevak...")
-            except Exception as e:
-                self.log_message(f"Did not detect manual click: {e}. Proceeding anyway.")
+            # Wait for your manual click, but detect progress by form reset (not staleness)
+            self.log_message("⏸ Click 'Save and Add Sevak' when ready...")
+            start = time.time()
+            detected = False
+            while time.time() - start < 90:  # up to 90s to detect form reset
+                if self.wait_for_blank_member_form(x, timeout=3):
+                    detected = True
+                    break
+                time.sleep(0.4)
+            if detected:
+                self.log_message("✅ Detected form reset. Continuing with next Sevak...")
+            else:
+                self.log_message("⚠️ Could not auto-detect form reset. Clearing fields and proceeding.")
+                try:
+                    self.clear_member_form(x)
+                except Exception:
+                    # Fallback minimal clear
+                    self.clear_input_by_xpath(x.get("name_input"))
+                    self.clear_input_by_xpath(x.get("id_proof_number_input"))
 
             if not self.wait_for_blank_member_form(x):
                 self.log_message("Form did not reset after Save and Add. Clearing manually...")
@@ -1256,19 +1519,32 @@ class TTDBookingBot:
                 self.clear_input_by_xpath(x.get("id_proof_number_input"))
 
             self.log_message(f"Filling Member {idx} details...")
-            # Fill full address for every member to avoid missing fields on subsequent entries
+            # Aadhaar-first, and only fill empty fields for members
             self.fill_srivari_team_leader(m, x, include_address=True)
 
-        # For the final member, also wait for manual click instead of clicking automatically
-        try:
-            self.log_message("⏸ Waiting for you to manually click 'Save and Add Sevak' for the final member...")
-            btn = WebDriverWait(self.driver, 10).until(
-                EC.presence_of_element_located((By.XPATH, x.get("save_add_sevak_button")))
-            )
-            WebDriverWait(self.driver, 300).until(EC.staleness_of(btn))
-            self.log_message("✅ Detected manual click! Final member saved.")
-        except Exception as e:
-            self.log_message(f"Could not confirm final manual save click: {e}")
+            # Save progress index for crash recovery
+            try:
+                with open("booking_data.json", "r", encoding="utf-8") as f:
+                    meta = json.load(f) if f.readable() else {}
+            except Exception:
+                meta = {}
+            try:
+                meta["current_member_index"] = idx + 1
+                with open("booking_data.json", "w", encoding="utf-8") as f:
+                    json.dump(meta, f, indent=2)
+            except Exception:
+                pass
+
+        # For the final member, detect save by input reset rather than staleness
+        self.log_message("⏸ Click 'Save and Add Sevak' for the final member...")
+        start = time.time()
+        while time.time() - start < 60:
+            if self.wait_for_blank_member_form(x, timeout=3):
+                self.log_message("✅ Detected final form reset. Saved.")
+                break
+            time.sleep(0.4)
+        else:
+            self.log_message("⚠️ Could not confirm final save by reset. Proceeding.")
 
         if general.get("auto_select_date"):
             self.log_message("Attempting to continue to booking...")
@@ -1281,6 +1557,19 @@ class TTDBookingBot:
         
         if general.get("auto_download_ticket"):
             self.log_message("Auto-download enabled. Tickets should go to configured folder.")
+
+        # Clear resume marker after successful flow
+        try:
+            meta_path = "booking_data.json"
+            if os.path.exists(meta_path):
+                with open(meta_path, "r", encoding="utf-8") as f:
+                    meta = json.load(f) or {}
+                if "current_member_index" in meta:
+                    del meta["current_member_index"]
+                    with open(meta_path, "w", encoding="utf-8") as f:
+                        json.dump(meta, f, indent=2)
+        except Exception:
+            pass
 
     def get_srivari_xpaths(self):
         return {
@@ -1306,7 +1595,8 @@ class TTDBookingBot:
             "street_input": "//*[@id=\"street\"]",
             "doorno_input": "//*[@id=\"doorNo\"]",
             "pincode_input": "//*[@id=\"pincode\"]",
-            "nearest_ttd_temple_dropdown": "/html/body/div/div[2]/main/div/div[12]/div[2]/div[1]/div[7]/div[2]/div[8]/div/input",
+            # Nearest TTD Temple dropdown (explicit ID)
+            "nearest_ttd_temple_dropdown": "//*[@id=\"nearestTtdTemple\"]",
             "member_container_template": "//*[@id=\"item-{index}\"]",
             "save_add_sevak_button": "//*[@id=\"__next\"]/div/main/div/div/div/div/button/span",
             "continue_button": "//*[@id=\"__next\"]/div/main/div/div/button"
@@ -1373,13 +1663,33 @@ class TTDBookingBot:
 
     def arrange_windows_side_by_side(self):
         try:
-            screen_w = self.root.winfo_screenwidth()
-            screen_h = self.root.winfo_screenheight()
-            gui_w = int(screen_w * 0.45)
-            gui_h = int(screen_h * 0.95)
-            self.root.geometry(f"{gui_w}x{gui_h}+0+0")
-            if self.driver:
-                self.driver.set_window_rect(x=gui_w, y=0, width=screen_w - gui_w, height=screen_h - 80)
+            # Determine screen size without relying on Tk when running headless (root=None)
+            try:
+                scr_w = int(self.driver.execute_script("return (window.screen && (window.screen.availWidth||window.screen.width)) || 1920;")) if self.driver else 1920
+                scr_h = int(self.driver.execute_script("return (window.screen && (window.screen.availHeight||window.screen.height)) || 1080;")) if self.driver else 1080
+            except Exception:
+                scr_w, scr_h = 1920, 1080
+
+            if self.root is not None:
+                # Split screen: GUI on left, browser on right
+                gui_w = int(scr_w * 0.45)
+                gui_h = int(scr_h * 0.95)
+                try:
+                    self.root.geometry(f"{gui_w}x{gui_h}+0+0")
+                except Exception:
+                    pass
+                if self.driver:
+                    try:
+                        self.driver.set_window_rect(x=gui_w, y=0, width=max(800, scr_w - gui_w), height=max(600, scr_h - 80))
+                    except Exception:
+                        pass
+            else:
+                # No GUI: maximize/resize browser to near full screen
+                if self.driver:
+                    try:
+                        self.driver.set_window_rect(x=0, y=0, width=max(1024, scr_w), height=max(700, scr_h - 80))
+                    except Exception:
+                        pass
         except Exception as e:
             self.log_message(f"Window arrangement failed: {e}")
 
