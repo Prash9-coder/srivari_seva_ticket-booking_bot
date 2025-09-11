@@ -585,6 +585,7 @@ function ConfigEditor() {
           <div className="flex items-center justify-between">
             <h3 className="font-medium">Members (up to 10)</h3>
             <div className="flex items-center gap-2">
+              {/* CSV Import */}
               <input id="import-csv-input" type="file" accept=".csv" style={{display:'none'}} onChange={async (e)=>{
                 const file = e.target.files?.[0]; if (!file) return
                 try {
@@ -598,6 +599,51 @@ function ConfigEditor() {
                 finally { e.target.value = '' }
               }} />
               <button onClick={()=>document.getElementById('import-csv-input')?.click()} className="inline-flex items-center justify-center rounded-md border px-2 py-1 text-sm hover:bg-gray-50">Import CSV</button>
+
+              {/* JSON Import */}
+              <input id="import-json-input" type="file" accept="application/json,.json" style={{display:'none'}} onChange={async (e)=>{
+                const file = e.target.files?.[0]; if (!file) return
+                try {
+                  const text = await file.text()
+                  const data = JSON.parse(text)
+                  // Accept either full {general, members} or just members array
+                  const nextGeneral = (data && typeof data === 'object' && !Array.isArray(data)) ? (data.general || {}) : {}
+                  const nextMembers = Array.isArray(data) ? data : (Array.isArray(data?.members) ? data.members : [])
+                  if (nextGeneral) {
+                    setGeneral(g => ({
+                      ...g,
+                      group_size: nextGeneral.group_size ?? g.group_size ?? '',
+                      download_dir: nextGeneral.download_dir ?? g.download_dir ?? '',
+                      auto_select_date: nextGeneral.auto_select_date ?? g.auto_select_date ?? true,
+                      auto_download_ticket: nextGeneral.auto_download_ticket ?? g.auto_download_ticket ?? true,
+                      respect_existing: nextGeneral.respect_existing ?? g.respect_existing ?? true,
+                      aadhaar_autofill_wait_seconds: nextGeneral.aadhaar_autofill_wait_seconds ?? g.aadhaar_autofill_wait_seconds ?? 6,
+                    }))
+                    if (typeof nextGeneral.webhook_url === 'string') setWebhookUrl(nextGeneral.webhook_url)
+                  }
+                  if (Array.isArray(nextMembers)) {
+                    setMembers(nextMembers.slice(0,10))
+                  }
+                  // Auto-save after import so backend persists to srivari_group_data.json
+                  try {
+                    const payload = { general: {
+                      group_size: nextGeneral.group_size ?? undefined,
+                      download_dir: nextGeneral.download_dir || undefined,
+                      auto_select_date: nextGeneral.auto_select_date ?? true,
+                      auto_download_ticket: nextGeneral.auto_download_ticket ?? true,
+                      respect_existing: nextGeneral.respect_existing ?? true,
+                      aadhaar_autofill_wait_seconds: Number(nextGeneral.aadhaar_autofill_wait_seconds ?? 6),
+                      webhook_url: typeof nextGeneral.webhook_url === 'string' ? nextGeneral.webhook_url : undefined,
+                    }, members: nextMembers.slice(0,10) }
+                    await apiFetch(`${API_BASE}/config`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+                  } catch(err) { console.error('auto-save failed', err) }
+                } catch(err) {
+                  console.error('JSON import failed', err)
+                  alert('Invalid JSON file')
+                } finally { e.target.value = '' }
+              }} />
+              <button onClick={()=>document.getElementById('import-json-input')?.click()} className="inline-flex items-center justify-center rounded-md border px-2 py-1 text-sm hover:bg-gray-50">Import JSON</button>
+
               <a href={`${API_BASE}/export/csv`} className="inline-flex items-center justify-center rounded-md border px-2 py-1 text-sm hover:bg-gray-50">Export CSV</a>
               <a href={`${API_BASE}/export/json`} className="inline-flex items-center justify-center rounded-md border px-2 py-1 text-sm hover:bg-gray-50">Export JSON</a>
               <button onClick={addMember} disabled={members.length >= 10} className="inline-flex items-center justify-center rounded-md border px-2 py-1 text-sm hover:bg-gray-50 disabled:opacity-50">Add Member</button>

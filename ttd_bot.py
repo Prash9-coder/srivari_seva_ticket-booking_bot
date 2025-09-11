@@ -109,18 +109,19 @@ class TTDBookingBot:
         ttk.Checkbutton(srivari_frame, text="Auto download ticket", variable=self.srivari_auto_download).grid(row=1, column=1, sticky=tk.W, padx=5)
 
         try:
-            if os.path.exists("srivari_group_data.json"):
-                with open("srivari_group_data.json", "r", encoding="utf-8") as f:
+            cfg_path = self.get_config_path()
+            if os.path.exists(cfg_path):
+                with open(cfg_path, "r", encoding="utf-8") as f:
                     _sg = json.load(f) or {}
-                    _g = _sg.get("general") or {}
-                    if _g.get("group_size") is not None:
-                        self.srivari_group_size_var.set(str(_g.get("group_size")))
-                    if _g.get("download_dir"):
-                        self.srivari_download_var.set(_g.get("download_dir"))
-                    if _g.get("auto_select_date") is not None:
-                        self.srivari_auto_date.set(bool(_g.get("auto_select_date")))
-                    if _g.get("auto_download_ticket") is not None:
-                        self.srivari_auto_download.set(bool(_g.get("auto_download_ticket")))
+                _g = _sg.get("general") or {}
+                if _g.get("group_size") is not None:
+                    self.srivari_group_size_var.set(str(_g.get("group_size")))
+                if _g.get("download_dir"):
+                    self.srivari_download_var.set(_g.get("download_dir"))
+                if _g.get("auto_select_date") is not None:
+                    self.srivari_auto_date.set(bool(_g.get("auto_select_date")))
+                if _g.get("auto_download_ticket") is not None:
+                    self.srivari_auto_download.set(bool(_g.get("auto_download_ticket")))
         except Exception:
             pass
 
@@ -218,10 +219,25 @@ class TTDBookingBot:
         except Exception:
             pass
 
+    def get_config_path(self):
+        try:
+            p = os.environ.get("TTD_CONFIG_PATH")
+            return p if p else "srivari_group_data.json"
+        except Exception:
+            return "srivari_group_data.json"
+
+    def get_config_dir(self):
+        try:
+            p = self.get_config_path()
+            return os.path.dirname(os.path.abspath(p))
+        except Exception:
+            return os.getcwd()
+
     def _load_srivari_members_to_gui(self):
         try:
-            if os.path.exists("srivari_group_data.json"):
-                with open("srivari_group_data.json", "r", encoding="utf-8") as f:
+            cfg_path = self.get_config_path()
+            if os.path.exists(cfg_path):
+                with open(cfg_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
                 # Accept both top-level array and {"members": [...]} formats
                 if isinstance(data, list):
@@ -296,11 +312,22 @@ class TTDBookingBot:
 
                     # Photo path (resolve relative names to images folder if needed)
                     photo_val = str(m.get("photo", m.get("photo_path", m.get("image", "")))).strip()
-                    # If just a filename like 1.jpg, prefix with images/ if exists
-                    if photo_val and not os.path.isabs(photo_val) and not os.path.sep in photo_val:
-                        candidate = os.path.join("images", photo_val)
-                        if os.path.exists(candidate):
-                            photo_val = candidate
+                    # If just a filename like 1.jpg, resolve relative to config dir first, then images/
+                    if photo_val and not os.path.isabs(photo_val) and os.path.sep not in photo_val:
+                        cfg_dir = self.get_config_dir()
+                        candidate_cfg = os.path.join(cfg_dir, photo_val)
+                        if os.path.exists(candidate_cfg):
+                            photo_val = candidate_cfg
+                        else:
+                            img_dir = os.environ.get("TTD_IMAGE_DIR")
+                            if img_dir:
+                                candidate_env = os.path.join(img_dir, photo_val)
+                                if os.path.exists(candidate_env):
+                                    photo_val = candidate_env
+                            else:
+                                candidate = os.path.join("images", photo_val)
+                                if os.path.exists(candidate):
+                                    photo_val = candidate
                     w["photo"].delete(0, tk.END); w["photo"].insert(0, photo_val)
         except Exception as ex:
             self.log_message(f"Failed to load members: {ex}")
@@ -333,16 +360,17 @@ class TTDBookingBot:
                 })
             # Preserve file format: if file was a list, write a list; if dict with 'members', keep that
             payload = members
-            if os.path.exists("srivari_group_data.json"):
+            cfg_path = self.get_config_path()
+            if os.path.exists(cfg_path):
                 try:
-                    with open("srivari_group_data.json", "r", encoding="utf-8") as f:
+                    with open(cfg_path, "r", encoding="utf-8") as f:
                         existing = json.load(f)
                     if isinstance(existing, dict):
                         existing["members"] = members
                         payload = existing
                 except Exception:
                     pass
-            with open("srivari_group_data.json", "w", encoding="utf-8") as f:
+            with open(cfg_path, "w", encoding="utf-8") as f:
                 json.dump(payload, f, indent=2)
             self.log_message("Members saved.")
             if show_message:
@@ -396,7 +424,7 @@ class TTDBookingBot:
     def _start_members_file_watch(self):
         # Simple polling watcher to auto-reload members when JSON changes
         try:
-            self._members_file = "srivari_group_data.json"
+            self._members_file = self.get_config_path()
             self._members_mtime = os.path.getmtime(self._members_file) if os.path.exists(self._members_file) else 0
         except Exception:
             self._members_mtime = 0
@@ -408,12 +436,12 @@ class TTDBookingBot:
 
     def _check_members_file_change(self):
         try:
-            path = getattr(self, "_members_file", "srivari_group_data.json")
+            path = getattr(self, "_members_file", self.get_config_path())
             if os.path.exists(path):
                 mtime = os.path.getmtime(path)
                 if mtime != getattr(self, "_members_mtime", 0):
                     self._members_mtime = mtime
-                    self.log_message("Detected srivari_group_data.json change. Auto reloading members...")
+                    self.log_message("Detected config change. Auto reloading members...")
                     self._load_srivari_members_to_gui()
         except Exception:
             pass
@@ -482,8 +510,9 @@ class TTDBookingBot:
 
             prefs = None
             try:
-                if os.path.exists("srivari_group_data.json"):
-                    with open("srivari_group_data.json", "r", encoding="utf-8") as f:
+                cfg_path = self.get_config_path()
+                if os.path.exists(cfg_path):
+                    with open(cfg_path, "r", encoding="utf-8") as f:
                         _sg = json.load(f)
                         _g = (_sg or {}).get("general") or {}
                         _dl = _g.get("download_dir")
@@ -1437,13 +1466,17 @@ class TTDBookingBot:
     def load_srivari_source(self):
         config = {"general": {}, "members": []}
         try:
-            if os.path.exists("srivari_group_data.json"):
-                with open("srivari_group_data.json", "r", encoding="utf-8") as f:
+            cfg_path = self.get_config_path()
+            if os.path.exists(cfg_path):
+                with open(cfg_path, "r", encoding="utf-8") as f:
                     config = json.load(f) or config
-            elif os.path.exists("srivari_members.json"):
-                with open("srivari_members.json", "r", encoding="utf-8") as f:
-                    data = json.load(f) or {}
-                    config["members"] = data.get("members", [])
+            else:
+                # Fallback to legacy file in same dir as config
+                legacy = os.path.join(self.get_config_dir(), "srivari_members.json")
+                if os.path.exists(legacy):
+                    with open(legacy, "r", encoding="utf-8") as f:
+                        data = json.load(f) or {}
+                        config["members"] = data.get("members", [])
         except Exception as e:
             self.log_message(f"Failed to load Srivari data: {e}")
         return config

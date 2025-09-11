@@ -95,19 +95,7 @@ def _touch_session(token: str):
     SESSIONS[token] = time.time() + SESSION_TTL
 
 def require_auth(session: Optional[str] = Cookie(default=None)):
-    # If no admin password is set, authentication is disabled
-    if not ADMIN_PASSWORD:
-        return True
-    if not session or session not in SESSIONS:
-        raise HTTPException(status_code=401, detail="Unauthorized")
-    if time.time() > SESSIONS[session]:
-        try:
-            del SESSIONS[session]
-        except Exception:
-            pass
-        raise HTTPException(status_code=401, detail="Session expired")
-    # refresh ttl
-    _touch_session(session)
+    # Authentication disabled globally
     return True
 
 class LoginPayload(BaseModel):
@@ -115,26 +103,17 @@ class LoginPayload(BaseModel):
 
 @app.post("/login")
 def login(payload: LoginPayload, resp: Response):
-    if ADMIN_PASSWORD and payload.password == ADMIN_PASSWORD:
-        tok = uuid.uuid4().hex
-        _touch_session(tok)
-        # HttpOnly cookie so browsers send it automatically (incl. <img>), SameSite=Lax for local use
-        resp.set_cookie("session", tok, httponly=True, samesite="lax", max_age=SESSION_TTL)
-        return {"ok": True}
-    elif not ADMIN_PASSWORD:
-        # If no password configured, allow open access
-        return {"ok": True, "note": "ADMIN_PASSWORD not set; auth disabled"}
-    raise HTTPException(status_code=401, detail="Invalid credentials")
+    # Authentication disabled globally; always OK
+    return {"ok": True, "note": "auth disabled"}
 
 @app.post("/logout")
 def logout(session: Optional[str] = Cookie(default=None), resp: Response = None):
-    if session and session in SESSIONS:
+    # Authentication disabled globally; no-op
+    if resp is not None:
         try:
-            del SESSIONS[session]
+            resp.delete_cookie("session")
         except Exception:
             pass
-    if resp is not None:
-        resp.delete_cookie("session")
     return {"ok": True}
 
 @app.get("/")
@@ -186,8 +165,10 @@ bot = TTDBookingBot(root=None)
 # Load persisted general flags into bot on startup
 try:
     import json
-    if os.path.exists("srivari_group_data.json"):
-        with open("srivari_group_data.json", "r", encoding="utf-8") as f:
+    # Prefer env-provided config path if present
+    _cfg_path = os.getenv("TTD_CONFIG_PATH") or "srivari_group_data.json"
+    if os.path.exists(_cfg_path):
+        with open(_cfg_path, "r", encoding="utf-8") as f:
             cfg = json.load(f) or {}
             g = (cfg.get("general") or {})
             bot.respect_existing = bool(g.get("respect_existing", True))
@@ -472,6 +453,31 @@ def get_config(_: bool = Depends(require_auth)):
     cfg = bot.load_srivari_source()
     return cfg
 
+@app.post("/config/path")
+def set_config_path(path: str, _: bool = Depends(require_auth)):
+    # Allow selecting a different group JSON at runtime (per-process)
+    try:
+        import os as _os
+        # Expand env vars and user home
+        resolved = _os.path.expandvars(_os.path.expanduser(path))
+        if not _os.path.isabs(resolved):
+            resolved = _os.path.abspath(resolved)
+        if not _os.path.exists(resolved):
+            raise HTTPException(status_code=400, detail="Config file not found")
+        _os.environ["TTD_CONFIG_PATH"] = resolved
+        # Trigger immediate reload for any watchers
+        try:
+            bot._members_file = resolved
+            bot._members_mtime = _os.path.getmtime(resolved)
+        except Exception:
+            pass
+        bot.log_message(f"Config path updated to: {resolved}")
+        return {"ok": True, "path": resolved}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/config")
 def set_config(payload: ConfigPayload, _: bool = Depends(require_auth)):
     data = {
@@ -479,7 +485,10 @@ def set_config(payload: ConfigPayload, _: bool = Depends(require_auth)):
         "members": [m.model_dump(exclude_none=True) for m in (payload.members or [])],
     }
     try:
-        with open("srivari_group_data.json", "w", encoding="utf-8") as f:
+        # Write to configured path if provided
+        import os
+        cfg_path = os.getenv("TTD_CONFIG_PATH") or os.path.join(os.getcwd(), "srivari_group_data.json")
+        with open(cfg_path, "w", encoding="utf-8") as f:
             import json
             json.dump(data, f, indent=2)
         # Apply behavior flags immediately to running bot
@@ -491,7 +500,7 @@ def set_config(payload: ConfigPayload, _: bool = Depends(require_auth)):
         except Exception:
             pass
         bot.log_message("Configuration updated via API.")
-        return {"ok": True}
+        return {"ok": True, "path": cfg_path}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
