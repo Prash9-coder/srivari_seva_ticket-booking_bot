@@ -2,7 +2,7 @@ services:
   - type: web
     name: ttd-bot-backend
     env: docker
-    dockerfilePath: ./Dockerfile
+    dockerfilePath: ./Dockerfile.fixed
     healthCheckPath: /healthz
     envVars:
       - key: PORT
@@ -10,7 +10,7 @@ services:
       - key: DISPLAY
         value: ":99"
       - key: FRONTEND_ORIGINS
-        value: "https://your-frontend-domain.vercel.app"
+        value: "https://localhost:5173,http://localhost:5173"
       - key: TTD_CONFIG_PATH
         value: "/app/srivari_group_data.json"
     scaling:
