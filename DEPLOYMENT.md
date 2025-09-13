@@ -78,12 +78,14 @@ git push -u origin main
 1. Go to [Vercel Dashboard](https://vercel.com/dashboard)
 2. Click "New Project"
 3. Import your GitHub repository
-4. Configure the project:
+4. **⚠️ IMPORTANT**: Configure the project settings:
    - **Framework Preset**: Vite
-   - **Root Directory**: `frontend`
+   - **Root Directory**: `frontend` ⭐ **MUST SET THIS**
    - **Build Command**: `npm run build`
-   - **Output Directory**: `dist`
+   - **Output Directory**: `dist` 
    - **Install Command**: `npm install`
+   
+   > 🚨 **Critical**: You MUST set "Root Directory" to `frontend` or deployment will fail with Python errors!
 
 5. Add Environment Variables (📋 **Copy from `.env` file**):
    ```
@@ -156,8 +158,18 @@ git push -u origin main
 3. Ensure Dockerfile builds successfully
 
 ### Frontend Issues
+
+**🔥 Common Error: `FileNotFoundError: main.py`**
+- **Cause**: Vercel is trying to deploy entire repo as Python project
+- **Solution**: Set "Root Directory" to `frontend` in Vercel project settings
+- **Steps**: 
+  1. Go to Vercel Dashboard → Your Project → Settings → General
+  2. Set "Root Directory" to `frontend`
+  3. Redeploy
+
+**Other Frontend Issues:**
 1. Check Vercel build logs
-2. Verify API_BASE environment variable
+2. Verify API_BASE environment variable  
 3. Check browser network tab for CORS errors
 
 ### Bot Issues
