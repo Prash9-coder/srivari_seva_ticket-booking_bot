@@ -13,7 +13,21 @@ The bot maintains its full visual functionality using a virtual display (Xvfb) o
 3. Vercel account (free tier available)
 4. Git installed on your local machine
 
-## Step 1: Prepare Your Repository
+## Step 1: Configure Environment Variables
+
+1. **Copy the environment template**:
+```bash
+cp .env.example .env
+```
+
+2. **Open `.env` file and update the placeholder values**:
+   - Replace `your-frontend-name` with your desired Vercel app name
+   - Replace `your-backend-name` with your desired Render app name  
+   - Set a strong `ADMIN_PASSWORD`
+
+> 📋 **Pro Tip**: The `.env` file contains all environment variables organized by platform. You can copy-paste directly from this file during deployment!
+
+## Step 2: Prepare Your Repository
 
 1. Initialize git repository (if not done):
 ```bash
@@ -29,7 +43,7 @@ git branch -M main
 git push -u origin main
 ```
 
-## Step 2: Deploy Backend on Render
+## Step 3: Deploy Backend on Render
 
 1. Go to [Render Dashboard](https://dashboard.render.com)
 2. Click "New" → "Web Service"
@@ -41,14 +55,17 @@ git push -u origin main
    - **Branch**: `main`
    - **Dockerfile Path**: `./Dockerfile`
 
-5. Add Environment Variables:
+5. Add Environment Variables (📋 **Copy from `.env` file**):
    ```
    PORT=8000
+   PYTHONUNBUFFERED=1
    DISPLAY=:99
-   FRONTEND_ORIGINS=https://your-frontend-domain.vercel.app
+   FRONTEND_ORIGINS=https://your-frontend-name.vercel.app
    TTD_CONFIG_PATH=/app/srivari_group_data.json
-   ADMIN_PASSWORD=your_secure_password
+   TTD_CHROME_PROFILE=/app/chrome_profile
+   ADMIN_PASSWORD=your_secure_password_here
    ```
+   > 💡 **Tip**: All environment variables are pre-configured in the `.env` file. Just copy and paste!
 
 6. Click "Create Web Service"
 
@@ -68,16 +85,17 @@ git push -u origin main
    - **Output Directory**: `dist`
    - **Install Command**: `npm install`
 
-5. Add Environment Variables:
+5. Add Environment Variables (📋 **Copy from `.env` file**):
    ```
-   VITE_API_BASE=https://your-render-backend-url.onrender.com
+   VITE_API_BASE=https://your-backend-name.onrender.com
    ```
+   > 💡 **Tip**: This variable is also pre-configured in the `.env` file!
 
 6. Click "Deploy"
 
 7. Note your frontend URL: `https://your-frontend.vercel.app`
 
-## Step 4: Update CORS Configuration
+## Step 5: Update CORS Configuration
 
 1. Go back to Render Dashboard
 2. Open your backend service
@@ -98,7 +116,7 @@ git push -u origin main
    ```
 4. Redeploy the frontend
 
-## Step 6: Test Your Deployment
+## Step 7: Test Your Deployment
 
 1. Visit your Vercel URL
 2. Try opening the browser from the web interface
