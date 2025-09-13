@@ -1,38 +1,36 @@
-# Use Python 3.11 slim image
-FROM python:3.11-slim
+# Use Python 3.11 image
+FROM python:3.11
 
-# Install system dependencies for Chrome and Xvfb (virtual display)
-RUN apt-get update && apt-get install -y \
+# Install system dependencies
+RUN apt-get update && \
+    apt-get install -y \
     wget \
-    gnupg \
-    unzip \
     curl \
+    unzip \
     xvfb \
-    x11-utils \
-    && rm -rf /var/lib/apt/lists/*
+    x11-utils && \
+    rm -rf /var/lib/apt/lists/*
 
 # Install Google Chrome
-RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add - \
-    && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list \
-    && apt-get update \
-    && apt-get install -y google-chrome-stable \
-    && rm -rf /var/lib/apt/lists/*
+RUN curl -fsSL https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb -o chrome.deb && \
+    apt-get update && \
+    apt-get install -y ./chrome.deb && \
+    rm chrome.deb && \
+    rm -rf /var/lib/apt/lists/*
 
 # Install ChromeDriver
-RUN CHROME_DRIVER_VERSION=$(curl -s "https://chromedriver.storage.googleapis.com/LATEST_RELEASE") \
-    && wget -O /tmp/chromedriver.zip "https://chromedriver.storage.googleapis.com/$CHROME_DRIVER_VERSION/chromedriver_linux64.zip" \
-    && unzip /tmp/chromedriver.zip -d /tmp/ \
-    && mv /tmp/chromedriver /usr/local/bin/chromedriver \
-    && chmod +x /usr/local/bin/chromedriver \
-    && rm /tmp/chromedriver.zip
+RUN CHROMEDRIVER_VERSION=$(curl -sS chromedriver.storage.googleapis.com/LATEST_RELEASE) && \
+    curl -fsSL http://chromedriver.storage.googleapis.com/$CHROMEDRIVER_VERSION/chromedriver_linux64.zip -o chromedriver.zip && \
+    unzip chromedriver.zip && \
+    mv chromedriver /usr/local/bin/ && \
+    chmod +x /usr/local/bin/chromedriver && \
+    rm chromedriver.zip
 
 # Set working directory
 WORKDIR /app
 
-# Copy requirements first for better caching
+# Copy requirements and install Python dependencies
 COPY requirements.txt .
-
-# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application files
@@ -45,18 +43,9 @@ RUN mkdir -p uploads chrome_profile downloads debug_screenshots
 ENV DISPLAY=:99
 ENV PYTHONUNBUFFERED=1
 
-# Create startup script
-RUN echo '#!/bin/bash\n\
-    # Start virtual display\n\
-    Xvfb :99 -screen 0 1920x1080x24 -ac +extension GLX +render -noreset &\n\
-    # Wait for Xvfb to start\n\
-    sleep 2\n\
-    # Start the application\n\
-    python -m uvicorn api_server:app --host 0.0.0.0 --port $PORT\n\
-    ' > /app/start.sh && chmod +x /app/start.sh
+# Start script
+RUN printf '#!/bin/bash\nXvfb :99 -screen 0 1920x1080x24 -ac +extension GLX +render -noreset &\nsleep 3\nexec python -m uvicorn api_server:app --host 0.0.0.0 --port $PORT\n' > start.sh && \
+    chmod +x start.sh
 
-# Expose port
 EXPOSE 8000
-
-# Start the application
-CMD ["/app/start.sh"]
+CMD ["./start.sh"]
