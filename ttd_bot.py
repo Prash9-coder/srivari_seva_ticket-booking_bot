@@ -539,10 +539,10 @@ class TTDBookingBot:
                     pass
             # Use webdriver-manager to fetch a ChromeDriver matching the installed Chrome
             try:
-                # Force specific version compatible with Chrome 140
-                service = Service(ChromeDriverManager(version="140.0.7339.82").install())
+                # Download latest ChromeDriver compatible with installed Chrome
+                service = Service(ChromeDriverManager().install())
                 self.driver = webdriver.Chrome(service=service, options=options)
-                self.log_message("WebDriver initialized with managed ChromeDriver v140")
+                self.log_message("WebDriver initialized with managed ChromeDriver (latest)")
             except Exception as e:
                 self.log_message(f"WebDriver manager failed: {str(e)[:100]}")
                 try:
