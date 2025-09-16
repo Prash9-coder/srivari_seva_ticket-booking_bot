@@ -43,4 +43,5 @@ requirements.txt
 
 # Ignore everything except frontend directory
 /*
+!/frontend
 !/frontend/**
