@@ -539,11 +539,22 @@ class TTDBookingBot:
                     pass
             # Use webdriver-manager to fetch a ChromeDriver matching the installed Chrome
             try:
-                service = Service(ChromeDriverManager().install())
+                # Force specific version compatible with Chrome 140
+                service = Service(ChromeDriverManager(version="140.0.7339.82").install())
                 self.driver = webdriver.Chrome(service=service, options=options)
-            except Exception:
-                # Fallback to default constructor if manager fails
-                self.driver = webdriver.Chrome(options=options)
+                self.log_message("WebDriver initialized with managed ChromeDriver v140")
+            except Exception as e:
+                self.log_message(f"WebDriver manager failed: {str(e)[:100]}")
+                try:
+                    # Try selenium-manager (Selenium 4.11+)
+                    service = Service()
+                    self.driver = webdriver.Chrome(service=service, options=options)
+                    self.log_message("WebDriver initialized with selenium-manager")
+                except Exception as e2:
+                    self.log_message(f"Selenium-manager failed: {str(e2)[:100]}")
+                    # Last resort fallback to default constructor
+                    self.driver = webdriver.Chrome(options=options)
+                    self.log_message("WebDriver initialized with default ChromeDriver (may fail)")
             try:
                 self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
             except Exception:
