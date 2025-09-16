@@ -12,6 +12,7 @@ from selenium.common.exceptions import TimeoutException, NoSuchElementException,
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.keys import Keys
 from webdriver_manager.chrome import ChromeDriverManager
+from webdriver_manager.core.utils import clear_cache
 import json
 import os
 import re
@@ -539,6 +540,8 @@ class TTDBookingBot:
                     pass
             # Use webdriver-manager to fetch a ChromeDriver matching the installed Chrome
             try:
+                # Clear cache to ensure latest ChromeDriver is downloaded
+                clear_cache()
                 # Download latest ChromeDriver compatible with installed Chrome
                 service = Service(ChromeDriverManager().install())
                 self.driver = webdriver.Chrome(service=service, options=options)
