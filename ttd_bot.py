@@ -7,9 +7,11 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import Select, WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
 from selenium.common.exceptions import TimeoutException, NoSuchElementException, WebDriverException
 from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.keys import Keys
+from webdriver_manager.chrome import ChromeDriverManager
 import json
 import os
 import re
@@ -535,7 +537,13 @@ class TTDBookingBot:
                     options.add_experimental_option("prefs", prefs)
                 except Exception:
                     pass
-            self.driver = webdriver.Chrome(options=options)
+            # Use webdriver-manager to fetch a ChromeDriver matching the installed Chrome
+            try:
+                service = Service(ChromeDriverManager().install())
+                self.driver = webdriver.Chrome(service=service, options=options)
+            except Exception:
+                # Fallback to default constructor if manager fails
+                self.driver = webdriver.Chrome(options=options)
             try:
                 self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
             except Exception:
