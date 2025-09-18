@@ -540,6 +540,9 @@ class TTDBookingBot:
             # Use webdriver-manager to fetch a ChromeDriver matching the installed Chrome
             try:
                 # Download latest ChromeDriver compatible with installed Chrome
+                # Clear cache to ensure latest version is downloaded
+                from webdriver_manager.core.utils import cache
+                cache.clear()
                 service = Service(ChromeDriverManager().install())
                 self.driver = webdriver.Chrome(service=service, options=options)
                 self.log_message("WebDriver initialized with managed ChromeDriver (latest)")
