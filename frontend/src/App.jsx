@@ -696,7 +696,43 @@ function Login({ onLoggedIn }) {
 
 export default function App() {
   const [authed, setAuthed] = useState(false)
+  const [authChecked, setAuthChecked] = useState(false)
+  
+  // Auto-login if auth is disabled
+  useEffect(() => {
+    async function checkAuth() {
+      try {
+        const res = await apiFetch(`${API_BASE}/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: 'test' })
+        })
+        const data = await res.json()
+        if (data.ok && data.note === 'auth disabled') {
+          setAuthed(true)
+        }
+      } catch (e) {
+        console.log('Auth check failed, showing login form', e)
+      } finally {
+        setAuthChecked(true)
+      }
+    }
+    checkAuth()
+  }, [])
+  
   async function logout() { await apiFetch(`${API_BASE}/logout`, { method: 'POST' }); setAuthed(false) }
+  
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin w-8 h-8 border-4 border-sky-500 border-t-transparent rounded-full mx-auto"></div>
+          <div className="mt-2 text-gray-600">Loading TTD Bot...</div>
+        </div>
+      </div>
+    )
+  }
+  
   return (
     <div className="min-h-screen bg-gray-50">
       {authed ? (
