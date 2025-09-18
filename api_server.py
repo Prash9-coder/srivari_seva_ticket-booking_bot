@@ -325,6 +325,40 @@ def open_local_browser(_: bool = Depends(require_auth)):
     except Exception as e:
         return {"ok": False, "error": str(e)}
 
+@app.post("/import-session")
+def import_session(payload: dict, _: bool = Depends(require_auth)):
+    """Import cookies/session data from local browser to remote browser"""
+    try:
+        cookies = payload.get("cookies", [])
+        if not bot.driver:
+            return {"ok": False, "error": "Remote browser not open. Please open remote browser first."}
+        
+        # Clear existing cookies
+        bot.driver.delete_all_cookies()
+        
+        # Import cookies
+        for cookie in cookies:
+            try:
+                # Selenium expects specific cookie format
+                if 'name' in cookie and 'value' in cookie:
+                    bot.driver.add_cookie({
+                        'name': cookie['name'],
+                        'value': cookie['value'],
+                        'domain': cookie.get('domain', 'ttdsevaonline.com'),
+                        'path': cookie.get('path', '/'),
+                        'secure': cookie.get('secure', False),
+                        'httpOnly': cookie.get('httpOnly', False)
+                    })
+            except Exception as e:
+                print(f"Failed to import cookie {cookie.get('name', 'unknown')}: {e}")
+        
+        # Navigate to TTD site to activate session
+        bot.driver.get("https://ttdsevaonline.com")
+        
+        return {"ok": True, "message": f"Imported {len(cookies)} cookies to remote browser"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
 @app.post("/start")
 def start(payload: StartPayload | None = None, _: bool = Depends(require_auth)):
     if payload and payload.open_browser:

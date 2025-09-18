@@ -6,6 +6,12 @@
     "respect_existing": true,
     "aadhaar_autofill_wait_seconds": 4
   },
+  "ttd_login": {
+    "username": "",
+    "password": "",
+    "auto_login": false,
+    "note": "Fill in your TTD website credentials for automatic login"
+  },
   "members": [
     {
       "name": "PAPANNAGARI SHANTHA",
