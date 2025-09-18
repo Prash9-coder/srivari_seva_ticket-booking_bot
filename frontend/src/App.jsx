@@ -216,6 +216,21 @@ function Dashboard() {
     } finally { setBusy(false) }
   }
 
+  async function openLocalBrowser() {
+    setBusy(true)
+    try {
+      const response = await apiFetch(`${API_BASE}/open-local-browser`, { method: 'POST' })
+      const data = await response.json()
+      if (data.ok) {
+        alert(`Browser opened locally! Navigate to: ${data.url}`)
+      } else {
+        alert(`Failed to open browser: ${data.error}`)
+      }
+    } catch (err) {
+      alert('Failed to open local browser. Make sure the server is running locally.')
+    } finally { setBusy(false) }
+  }
+
   async function startBot() {
     setBusy(true)
     try {
@@ -253,18 +268,35 @@ function Dashboard() {
       </div>
       <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="rounded-lg border bg-white p-4">
-          <h3 className="font-medium">Browser</h3>
-          <p className="text-sm text-gray-600">Open Chrome and navigate.</p>
-          <button
-            disabled={busy || status.browser_open}
-            onClick={openBrowser}
-            className="mt-3 inline-flex items-center justify-center rounded-md bg-sky-600 px-3 py-2 text-white text-sm hover:bg-sky-700 disabled:opacity-50"
-          >Open Browser</button>
-          <button
-            disabled={busy || !status.browser_open}
-            onClick={closeBrowser}
-            className="mt-2 inline-flex items-center justify-center rounded-md bg-gray-600 px-3 py-2 text-white text-sm hover:bg-gray-700 disabled:opacity-50"
-          >Close Browser</button>
+          <h3 className="font-medium">Browser Control</h3>
+          <p className="text-sm text-gray-600">Choose browser mode for interaction.</p>
+          
+          <div className="mt-3 space-y-2">
+            <div className="text-xs font-medium text-gray-700">Local Browser (Manual Login)</div>
+            <button
+              disabled={busy}
+              onClick={openLocalBrowser}
+              className="w-full inline-flex items-center justify-center rounded-md bg-green-600 px-3 py-2 text-white text-sm hover:bg-green-700 disabled:opacity-50"
+            >🌐 Open TTD Site Locally</button>
+            <div className="text-xs text-gray-500">Opens TTD website in your default browser for manual login</div>
+          </div>
+
+          <hr className="my-3" />
+
+          <div className="space-y-2">
+            <div className="text-xs font-medium text-gray-700">Remote Browser (Bot Control)</div>
+            <button
+              disabled={busy || status.browser_open}
+              onClick={openBrowser}
+              className="w-full inline-flex items-center justify-center rounded-md bg-sky-600 px-3 py-2 text-white text-sm hover:bg-sky-700 disabled:opacity-50"
+            >🤖 Open Remote Browser</button>
+            <button
+              disabled={busy || !status.browser_open}
+              onClick={closeBrowser}
+              className="w-full inline-flex items-center justify-center rounded-md bg-gray-600 px-3 py-2 text-white text-sm hover:bg-gray-700 disabled:opacity-50"
+            >Close Remote Browser</button>
+            <div className="text-xs text-gray-500">Headless browser on server for automation</div>
+          </div>
         </div>
         <div className="rounded-lg border bg-white p-4">
           <h3 className="font-medium">Bot</h3>

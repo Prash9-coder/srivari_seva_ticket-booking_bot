@@ -8,6 +8,7 @@ import uvicorn
 import os
 import time
 import uuid
+import webbrowser
 from typing import List, Optional
 
 from ttd_bot import TTDBookingBot
@@ -313,6 +314,16 @@ def get_timer():
 def open_browser(_: bool = Depends(require_auth)):
     threading.Thread(target=bot.open_browser, daemon=True).start()
     return {"ok": True}
+
+@app.post("/open-local-browser")
+def open_local_browser(_: bool = Depends(require_auth)):
+    """Open TTD website in user's default browser for manual login"""
+    try:
+        ttd_url = "https://ttdsevaonline.com"
+        webbrowser.open(ttd_url)
+        return {"ok": True, "message": "Browser opened locally", "url": ttd_url}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
 
 @app.post("/start")
 def start(payload: StartPayload | None = None, _: bool = Depends(require_auth)):
