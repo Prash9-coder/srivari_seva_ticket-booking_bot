@@ -42,12 +42,14 @@ ENV PYTHONUNBUFFERED=1
 
 # Create start script
 RUN printf '#!/bin/bash\n\
-    # Start virtual display\n\
+    set -e\n\
+    # Clean up any stale Xvfb lock and start virtual display if not running\n\
+    if [ -e /tmp/.X99-lock ]; then rm -f /tmp/.X99-lock; fi\n\
+    if ! pgrep -x Xvfb >/dev/null 2>&1; then\n\
     Xvfb :99 -screen 0 1920x1080x24 -ac +extension GLX +render -noreset &\n\
-    \n\
+    fi\n\
     # Wait for display to be ready\n\
-    sleep 3\n\
-    \n\
+    sleep 2\n\
     # Start the FastAPI application\n\
     exec python -m uvicorn api_server:app --host 0.0.0.0 --port $PORT\n' > start.sh && \
     chmod +x start.sh

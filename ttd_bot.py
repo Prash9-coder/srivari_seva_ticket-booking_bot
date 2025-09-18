@@ -1,5 +1,12 @@
-import tkinter as tk
-from tkinter import ttk, messagebox, scrolledtext, filedialog
+# Tkinter is optional (not available in headless server builds)
+try:
+    import tkinter as tk
+    from tkinter import ttk, messagebox, scrolledtext, filedialog
+    HAS_TK = True
+except Exception:
+    tk = None
+    ttk = messagebox = scrolledtext = filedialog = None
+    HAS_TK = False
 import threading
 import time
 from selenium import webdriver
@@ -539,10 +546,12 @@ class TTDBookingBot:
                     pass
             # Use webdriver-manager to fetch a ChromeDriver matching the installed Chrome
             try:
-                # Download latest ChromeDriver compatible with installed Chrome
-                # Clear cache to ensure latest version is downloaded
-                from webdriver_manager.core.utils import cache
-                cache.clear()
+                # Attempt to clear cache, but continue even if not available in this version
+                try:
+                    from webdriver_manager.core.utils import cache
+                    cache.clear()
+                except Exception:
+                    pass
                 service = Service(ChromeDriverManager().install())
                 self.driver = webdriver.Chrome(service=service, options=options)
                 self.log_message("WebDriver initialized with managed ChromeDriver (latest)")
