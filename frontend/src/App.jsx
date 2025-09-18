@@ -227,7 +227,7 @@ function Dashboard() {
         alert(`Failed to open browser: ${data.error}`)
       }
     } catch (err) {
-      alert('Failed to open local browser. Make sure the server is running locally.')
+      alert(`Failed to open local browser. Make sure the server is running locally. Error: ${err.message}`)
     } finally { setBusy(false) }
   }
 
