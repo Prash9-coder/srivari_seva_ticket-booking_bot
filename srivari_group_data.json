@@ -6,15 +6,9 @@
     "respect_existing": true,
     "aadhaar_autofill_wait_seconds": 4
   },
-  "ttd_login": {
-    "username": "",
-    "password": "",
-    "auto_login": false,
-    "note": "Fill in your TTD website credentials for automatic login"
-  },
   "members": [
     {
-      "name": "PAPANNAGARI SHANTHA",
+      "name": "Prashanth Nimmala",
       "dob": "1999-02-01",
       "age": "26",
       "blood_group": "O+",
@@ -72,7 +66,7 @@
     },
     {
       "name": "G ANITHA",
-      "dob": "1990-08-15",
+      "dob": "1998-08-15",
       "age": "35",
       "blood_group": "",
       "gender": "Female",

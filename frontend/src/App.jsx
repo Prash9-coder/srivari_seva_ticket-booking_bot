@@ -216,59 +216,6 @@ function Dashboard() {
     } finally { setBusy(false) }
   }
 
-  async function openLocalBrowser() {
-    setBusy(true)
-    try {
-      const response = await apiFetch(`${API_BASE}/open-local-browser`, { method: 'POST' })
-      const data = await response.json()
-      if (data.ok) {
-        alert(`Browser opened locally! Navigate to: ${data.url}`)
-      } else {
-        alert(`Failed to open browser: ${data.error}`)
-      }
-    } catch (err) {
-      alert(`Failed to open local browser. Make sure the server is running locally. Error: ${err.message}`)
-    } finally { setBusy(false) }
-  }
-
-  async function transferSession() {
-    setBusy(true)
-    try {
-      // Check if remote browser is open
-      if (!status.browser_open) {
-        alert('Please open remote browser first!')
-        return
-      }
-
-      // Show instructions for manual cookie copy
-      const instructions = `
-To transfer your login session:
-
-1. Go to TTD website in your browser (already open)
-2. Log in manually if not already logged in
-3. Press F12 to open Developer Tools
-4. Go to "Application" or "Storage" tab
-5. Click "Cookies" → "https://ttdsevaonline.com"
-6. Copy the important cookies (especially session/auth related ones)
-
-For now, this requires manual cookie copying. 
-Would you like me to show you the exact cookies to copy?
-
-Click OK if you've logged in successfully and want to proceed.`
-      
-      if (!confirm(instructions)) {
-        return
-      }
-
-      // For now, we'll implement a basic session sync approach
-      // In a full implementation, this would involve cookie extraction
-      alert('Session transfer feature is being enhanced. For now, the bot will need to login automatically using stored credentials, or run the bot locally where it can access the same browser session.')
-      
-    } catch (err) {
-      alert(`Failed to transfer session: ${err.message}`)
-    } finally { setBusy(false) }
-  }
-
   async function startBot() {
     setBusy(true)
     try {
@@ -306,40 +253,18 @@ Click OK if you've logged in successfully and want to proceed.`
       </div>
       <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="rounded-lg border bg-white p-4">
-          <h3 className="font-medium">Browser Control</h3>
-          <p className="text-sm text-gray-600">Choose browser mode for interaction.</p>
-          
-          <div className="mt-3 space-y-2">
-            <div className="text-xs font-medium text-gray-700">Local Browser (Manual Login)</div>
-            <button
-              disabled={busy}
-              onClick={openLocalBrowser}
-              className="w-full inline-flex items-center justify-center rounded-md bg-green-600 px-3 py-2 text-white text-sm hover:bg-green-700 disabled:opacity-50"
-            >🌐 Open TTD Site Locally</button>
-            <button
-              disabled={busy || !status.browser_open}
-              onClick={transferSession}
-              className="w-full inline-flex items-center justify-center rounded-md bg-amber-600 px-3 py-2 text-white text-sm hover:bg-amber-700 disabled:opacity-50"
-            >🔄 Transfer Login Session</button>
-            <div className="text-xs text-gray-500">1. Login manually, then 2. Transfer session to bot</div>
-          </div>
-
-          <hr className="my-3" />
-
-          <div className="space-y-2">
-            <div className="text-xs font-medium text-gray-700">Remote Browser (Bot Control)</div>
-            <button
-              disabled={busy || status.browser_open}
-              onClick={openBrowser}
-              className="w-full inline-flex items-center justify-center rounded-md bg-sky-600 px-3 py-2 text-white text-sm hover:bg-sky-700 disabled:opacity-50"
-            >🤖 Open Remote Browser</button>
-            <button
-              disabled={busy || !status.browser_open}
-              onClick={closeBrowser}
-              className="w-full inline-flex items-center justify-center rounded-md bg-gray-600 px-3 py-2 text-white text-sm hover:bg-gray-700 disabled:opacity-50"
-            >Close Remote Browser</button>
-            <div className="text-xs text-gray-500">Headless browser on server for automation</div>
-          </div>
+          <h3 className="font-medium">Browser</h3>
+          <p className="text-sm text-gray-600">Open Chrome and navigate.</p>
+          <button
+            disabled={busy || status.browser_open}
+            onClick={openBrowser}
+            className="mt-3 inline-flex items-center justify-center rounded-md bg-sky-600 px-3 py-2 text-white text-sm hover:bg-sky-700 disabled:opacity-50"
+          >Open Browser</button>
+          <button
+            disabled={busy || !status.browser_open}
+            onClick={closeBrowser}
+            className="mt-2 inline-flex items-center justify-center rounded-md bg-gray-600 px-3 py-2 text-white text-sm hover:bg-gray-700 disabled:opacity-50"
+          >Close Browser</button>
         </div>
         <div className="rounded-lg border bg-white p-4">
           <h3 className="font-medium">Bot</h3>
@@ -514,7 +439,6 @@ function MemberRow({ index, value, onChange, onRemove, disabledRemove, onMoveUp,
 function ConfigEditor() {
   const [webhookUrl, setWebhookUrl] = useState('')
   const [general, setGeneral] = useState({ group_size: '', download_dir: '', auto_select_date: true, auto_download_ticket: true, respect_existing: true, aadhaar_autofill_wait_seconds: 6 })
-  const [ttdLogin, setTtdLogin] = useState({ username: '', password: '', auto_login: false })
   const [members, setMembers] = useState([])
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -535,11 +459,6 @@ function ConfigEditor() {
         aadhaar_autofill_wait_seconds: data?.general?.aadhaar_autofill_wait_seconds ?? 6,
       })
       setWebhookUrl(data?.general?.webhook_url || '')
-      setTtdLogin({
-        username: data?.ttd_login?.username || '',
-        password: data?.ttd_login?.password || '',
-        auto_login: !!data?.ttd_login?.auto_login,
-      })
       const arr = Array.isArray(data?.members) ? data.members : []
       setMembers(arr.slice(0, 10))
     } catch (e) {
@@ -571,12 +490,6 @@ function ConfigEditor() {
           respect_existing: !!general.respect_existing,
           aadhaar_autofill_wait_seconds: Number(general.aadhaar_autofill_wait_seconds || 6),
           webhook_url: webhookUrl || undefined,
-        },
-        ttd_login: {
-          username: ttdLogin.username || undefined,
-          password: ttdLogin.password || undefined,
-          auto_login: !!ttdLogin.auto_login,
-          note: "Fill in your TTD website credentials for automatic login",
         },
         members: members,
       }
@@ -632,43 +545,6 @@ function ConfigEditor() {
       </div>
 
       <div className="mt-4 grid grid-cols-1 gap-4">
-        <div className="rounded-lg border bg-white p-4">
-          <h3 className="font-medium">TTD Login Configuration</h3>
-          <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <Field label="TTD Username" hint="Your TTD website login username/email">
-              <input 
-                type="text" 
-                value={ttdLogin.username} 
-                onChange={e=>setTtdLogin(t=>({...t, username: e.target.value}))} 
-                className="w-full rounded border px-2 py-1" 
-                placeholder="your_username@email.com" 
-              />
-            </Field>
-            <Field label="TTD Password" hint="Your TTD website password">
-              <input 
-                type="password" 
-                value={ttdLogin.password} 
-                onChange={e=>setTtdLogin(t=>({...t, password: e.target.value}))} 
-                className="w-full rounded border px-2 py-1" 
-                placeholder="Enter your password" 
-              />
-            </Field>
-            <Field label="Enable Auto-Login" hint="Bot will automatically login with these credentials">
-              <div className="flex items-center gap-2">
-                <input 
-                  type="checkbox" 
-                  checked={ttdLogin.auto_login} 
-                  onChange={e=>setTtdLogin(t=>({...t, auto_login: e.target.checked}))} 
-                />
-                <span className="text-sm text-gray-700">Auto-login when browser opens</span>
-              </div>
-            </Field>
-          </div>
-          <div className="mt-2 text-xs text-gray-500 bg-amber-50 p-2 rounded">
-            <strong>🔒 Security Note:</strong> Credentials are stored in your configuration file. Enable auto-login to let the bot automatically log in when opening the remote browser.
-          </div>
-        </div>
-
         <div className="rounded-lg border bg-white p-4">
           <h3 className="font-medium">Srivari Seva Group Settings</h3>
           <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -820,43 +696,7 @@ function Login({ onLoggedIn }) {
 
 export default function App() {
   const [authed, setAuthed] = useState(false)
-  const [authChecked, setAuthChecked] = useState(false)
-  
-  // Auto-login if auth is disabled
-  useEffect(() => {
-    async function checkAuth() {
-      try {
-        const res = await apiFetch(`${API_BASE}/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ password: 'test' })
-        })
-        const data = await res.json()
-        if (data.ok && data.note === 'auth disabled') {
-          setAuthed(true)
-        }
-      } catch (e) {
-        console.log('Auth check failed, showing login form', e)
-      } finally {
-        setAuthChecked(true)
-      }
-    }
-    checkAuth()
-  }, [])
-  
   async function logout() { await apiFetch(`${API_BASE}/logout`, { method: 'POST' }); setAuthed(false) }
-  
-  if (!authChecked) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin w-8 h-8 border-4 border-sky-500 border-t-transparent rounded-full mx-auto"></div>
-          <div className="mt-2 text-gray-600">Loading TTD Bot...</div>
-        </div>
-      </div>
-    )
-  }
-  
   return (
     <div className="min-h-screen bg-gray-50">
       {authed ? (

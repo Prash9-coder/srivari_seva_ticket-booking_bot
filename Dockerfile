@@ -13,9 +13,8 @@ RUN apt-get update && \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Google Chrome
-RUN mkdir -p /etc/apt/keyrings \
-    && wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /etc/apt/keyrings/google-chrome.gpg \
-    && echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/google-chrome.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list \
+RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - \
+    && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google.list \
     && apt-get update \
     && apt-get install -y google-chrome-stable \
     && rm -rf /var/lib/apt/lists/*
@@ -42,14 +41,12 @@ ENV PYTHONUNBUFFERED=1
 
 # Create start script
 RUN printf '#!/bin/bash\n\
-    set -e\n\
-    # Clean up any stale Xvfb lock and start virtual display if not running\n\
-    if [ -e /tmp/.X99-lock ]; then rm -f /tmp/.X99-lock; fi\n\
-    if ! pgrep -x Xvfb >/dev/null 2>&1; then\n\
+    # Start virtual display\n\
     Xvfb :99 -screen 0 1920x1080x24 -ac +extension GLX +render -noreset &\n\
-    fi\n\
+    \n\
     # Wait for display to be ready\n\
-    sleep 2\n\
+    sleep 3\n\
+    \n\
     # Start the FastAPI application\n\
     exec python -m uvicorn api_server:app --host 0.0.0.0 --port $PORT\n' > start.sh && \
     chmod +x start.sh

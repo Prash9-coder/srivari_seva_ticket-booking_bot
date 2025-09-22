@@ -1,12 +1,5 @@
-# Tkinter is optional (not available in headless server builds)
-try:
-    import tkinter as tk
-    from tkinter import ttk, messagebox, scrolledtext, filedialog
-    HAS_TK = True
-except Exception:
-    tk = None
-    ttk = messagebox = scrolledtext = filedialog = None
-    HAS_TK = False
+import tkinter as tk
+from tkinter import ttk, messagebox, scrolledtext, filedialog
 import threading
 import time
 from selenium import webdriver
@@ -546,12 +539,7 @@ class TTDBookingBot:
                     pass
             # Use webdriver-manager to fetch a ChromeDriver matching the installed Chrome
             try:
-                # Attempt to clear cache, but continue even if not available in this version
-                try:
-                    from webdriver_manager.core.utils import cache
-                    cache.clear()
-                except Exception:
-                    pass
+                # Download latest ChromeDriver compatible with installed Chrome
                 service = Service(ChromeDriverManager().install())
                 self.driver = webdriver.Chrome(service=service, options=options)
                 self.log_message("WebDriver initialized with managed ChromeDriver (latest)")
@@ -578,47 +566,14 @@ class TTDBookingBot:
             except Exception:
                 pass
             self.is_browser_open = True
-            
-            # Check if auto-login is enabled and credentials are provided
+            # Guard UI updates in headless mode
             try:
-                login_config = self.booking_data.get('ttd_login', {})
-                if (login_config.get('auto_login', False) and 
-                    login_config.get('username') and 
-                    login_config.get('password')):
-                    self.log_message("Auto-login enabled. Attempting automatic login...")
-                    if self.perform_auto_login(login_config['username'], login_config['password']):
-                        self.log_message("Auto-login successful!")
-                        # Guard UI updates in headless mode
-                        try:
-                            self.status_label.config(text="Status: Logged in automatically", foreground="green")
-                        except Exception:
-                            pass
-                    else:
-                        self.log_message("Auto-login failed. Please login manually.")
-                        # Guard UI updates in headless mode
-                        try:
-                            self.status_label.config(text="Status: Auto-login failed - Please login manually", foreground="orange")
-                        except Exception:
-                            pass
-                else:
-                    # Guard UI updates in headless mode
-                    try:
-                        self.activate_button.config(state=tk.NORMAL)
-                        self.open_browser_button.config(state=tk.DISABLED)
-                        self.status_label.config(text="Status: Browser open - Please login manually", foreground="orange")
-                    except Exception:
-                        pass
-                    self.log_message("Browser opened successfully. Please login manually and navigate to the Srivari Seva Team Leader page.")
-            except Exception as e:
-                self.log_message(f"Auto-login check failed: {str(e)}")
-                # Guard UI updates in headless mode
-                try:
-                    self.activate_button.config(state=tk.NORMAL)
-                    self.open_browser_button.config(state=tk.DISABLED)
-                    self.status_label.config(text="Status: Browser open - Please login manually", foreground="orange")
-                except Exception:
-                    pass
-                self.log_message("Browser opened successfully. Please login manually and navigate to the Srivari Seva Team Leader page.")
+                self.activate_button.config(state=tk.NORMAL)
+                self.open_browser_button.config(state=tk.DISABLED)
+                self.status_label.config(text="Status: Browser open - Please login manually", foreground="orange")
+            except Exception:
+                pass
+            self.log_message("Browser opened successfully. Please login manually and navigate to the Srivari Seva Team Leader page.")
         except WebDriverException as e:
             self.log_message(f"WebDriver error: {str(e)}")
             try:
@@ -631,172 +586,6 @@ class TTDBookingBot:
                 messagebox.showerror("Error", f"Unexpected error: {str(e)}")
             except Exception:
                 pass
-
-    def perform_auto_login(self, username, password):
-        """
-        Attempt to automatically login to TTD website
-        Returns True if login appears successful, False otherwise
-        """
-        try:
-            self.log_message(f"Attempting to login with username: {username}")
-            
-            # Wait for page to load and look for login elements
-            wait = WebDriverWait(self.driver, 10)
-            
-            # First, try to find and click login button/link if it exists
-            try:
-                # Look for common login button/link text patterns
-                login_patterns = ["Login", "Sign In", "लॉगिन", "साइन इन"]
-                for pattern in login_patterns:
-                    try:
-                        login_button = self.driver.find_element(By.XPATH, f"//*[contains(text(), '{pattern}')]")
-                        if login_button.is_displayed():
-                            login_button.click()
-                            self.log_message(f"Clicked login button: {pattern}")
-                            time.sleep(2)
-                            break
-                    except:
-                        continue
-            except:
-                pass
-            
-            # Look for username/email input field
-            username_field = None
-            username_selectors = [
-                "input[type='text'][name*='user']",
-                "input[type='text'][name*='email']",
-                "input[type='email']",
-                "input[id*='user']",
-                "input[id*='email']",
-                "input[placeholder*='user']",
-                "input[placeholder*='email']",
-                "#username",
-                "#email",
-                "[name='username']",
-                "[name='email']",
-                "[name='user']"
-            ]
-            
-            for selector in username_selectors:
-                try:
-                    username_field = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, selector)))
-                    if username_field.is_displayed():
-                        self.log_message(f"Found username field with selector: {selector}")
-                        break
-                except:
-                    continue
-            
-            if not username_field:
-                self.log_message("Username field not found")
-                return False
-            
-            # Clear and enter username
-            username_field.clear()
-            username_field.send_keys(username)
-            self.log_message("Username entered")
-            
-            # Look for password input field
-            password_field = None
-            password_selectors = [
-                "input[type='password']",
-                "input[name*='pass']",
-                "input[id*='pass']",
-                "#password",
-                "[name='password']"
-            ]
-            
-            for selector in password_selectors:
-                try:
-                    password_field = self.driver.find_element(By.CSS_SELECTOR, selector)
-                    if password_field.is_displayed():
-                        self.log_message(f"Found password field with selector: {selector}")
-                        break
-                except:
-                    continue
-            
-            if not password_field:
-                self.log_message("Password field not found")
-                return False
-            
-            # Clear and enter password
-            password_field.clear()
-            password_field.send_keys(password)
-            self.log_message("Password entered")
-            
-            # Look for submit/login button
-            submit_button = None
-            submit_selectors = [
-                "input[type='submit']",
-                "button[type='submit']",
-                "button[onclick*='login']",
-                "input[value*='Login']",
-                "input[value*='Sign']",
-                "button:contains('Login')",
-                "button:contains('Sign In')",
-                ".login-btn",
-                ".submit-btn"
-            ]
-            
-            for selector in submit_selectors:
-                try:
-                    submit_button = self.driver.find_element(By.CSS_SELECTOR, selector)
-                    if submit_button.is_displayed():
-                        self.log_message(f"Found submit button with selector: {selector}")
-                        break
-                except:
-                    continue
-            
-            if not submit_button:
-                # Try pressing Enter on password field as fallback
-                password_field.send_keys(Keys.RETURN)
-                self.log_message("Pressed Enter on password field")
-            else:
-                # Click submit button
-                submit_button.click()
-                self.log_message("Clicked submit button")
-            
-            # Wait a bit for login to process
-            time.sleep(3)
-            
-            # Check if login was successful by looking for indicators
-            current_url = self.driver.current_url
-            page_source = self.driver.page_source.lower()
-            
-            # Success indicators
-            success_indicators = [
-                "dashboard",
-                "welcome",
-                "logout",
-                "profile",
-                "srivari seva",
-                "booking",
-                current_url != "https://ttdevasthanams.ap.gov.in"  # URL changed
-            ]
-            
-            # Error indicators
-            error_indicators = [
-                "invalid",
-                "incorrect",
-                "error",
-                "failed",
-                "wrong",
-                "retry"
-            ]
-            
-            # Check for success
-            success_found = any(indicator in page_source if isinstance(indicator, str) else indicator for indicator in success_indicators)
-            error_found = any(indicator in page_source for indicator in error_indicators)
-            
-            if success_found and not error_found:
-                self.log_message("Login appears successful!")
-                return True
-            else:
-                self.log_message(f"Login may have failed. URL: {current_url}")
-                return False
-                
-        except Exception as e:
-            self.log_message(f"Auto-login error: {str(e)}")
-            return False
 
     def start_bot(self):
         self.is_running = True
